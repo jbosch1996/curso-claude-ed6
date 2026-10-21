@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.angular/
+*.db
+.env
+.env.*
+!.env.example
+.DS_Store
+.claude/worktrees/
