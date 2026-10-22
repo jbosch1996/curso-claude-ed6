@@ -9,6 +9,10 @@ import dishRoutes from '@routes/dish.routes.js'
 import publicRestaurantRoutes from '@routes/restaurant.public.routes.js'
 import publicDishRoutes from '@routes/dish.public.routes.js'
 import orderRoutes from '@routes/order.routes.js'
+import billRoutes from '@routes/bill.routes.js'
+import discountCodeRoutes from '@routes/discount-code.routes.js'
+import pointsRuleRoutes from '@routes/points-rule.routes.js'
+import loyaltyRoutes from '@routes/loyalty.routes.js'
 import { errorHandler } from '@shared/infrastructure/http/errorHandler.js'
 
 const app = express()
@@ -16,7 +20,9 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+app.use('/api/v1/orders', billRoutes)
 app.use('/api/v1/orders', orderRoutes)
+app.use('/api/v1/loyalty', loyaltyRoutes)
 app.use('/api/v1/auth', authRoutes)
 app.use('/api/v1/employees', employeeRoutes)
 app.use('/api/v1/public/restaurants', publicRestaurantRoutes)
@@ -24,6 +30,8 @@ app.use('/api/v1/public/restaurants/:restaurantId/dishes', publicDishRoutes)
 app.use('/api/v1/restaurants', restaurantRoutes)
 app.use('/api/v1/restaurants/:restaurantId/ingredients', ingredientRoutes)
 app.use('/api/v1/restaurants/:restaurantId/dishes', dishRoutes)
+app.use('/api/v1/restaurants/:restaurantId/discount-codes', discountCodeRoutes)
+app.use('/api/v1/restaurants/:restaurantId/points-rules', pointsRuleRoutes)
 app.use('/api/v1/restaurants/:restaurantId/employees', restaurantEmployeeRoutes)
 
 app.get('/health', (_req, res) => {

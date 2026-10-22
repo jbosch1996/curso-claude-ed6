@@ -1,0 +1,49 @@
+.subtitle {
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.rule-form {
+  max-width: 700px;
+  margin-bottom: 20px;
+}
+
+.rule-form h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+
+.rule-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.rule-row .form-group {
+  flex: 1;
+  min-width: 120px;
+}
+
+.equals {
+  padding-bottom: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.rule-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.points {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.value {
+  font-weight: 600;
+  color: var(--green-light);
+}
