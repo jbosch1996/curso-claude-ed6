@@ -377,6 +377,23 @@ Reglas de `BillService.create`:
 - **Puntos ganados:** `earnedPoints(total, ritmo)` = `floor(total / amount) * points` en céntimos enteros, con el ritmo del restaurante (`points_earning_rates`, `PointsEarningService`/`SqlitePointsEarningRepository`). Sin ritmo configurado se usa `DEFAULT_POINTS_EARNING` (1 € → 1 punto, es decir `floor(total)`). El total es el pagado tras descuentos; el cambio de ritmo no es retroactivo. `amount` va de 0,01 a 10.000 € (redondeado a céntimos) y `points` es un entero de 1 a 10.000.
 - **Sin transacciones** (la conexión SQLite es compartida): se inserta la cuenta (`UNIQUE(order_id)`), se descuentan los puntos con un `UPDATE … WHERE balance >= ?` atómico (si falla, se borra la cuenta) y se suman los puntos ganados.
 
+### Packs
+
+Por capas: `models/pack.model.ts` (`validatePackFields`, `eligibleDishes`, `resolvePackSelection`), `repositories/pack.repository.ts` (+ `mocks/MockPackRepository.ts`), `services/pack.service.ts`, `controllers/pack.controller.ts`, `routes/pack.routes.ts` (factory `createPackRouter(service)`) y `routes/pack.public.routes.ts` (factory `createPublicPackRouter(service)`). Un pack tiene nombre, descripción opcional, precio fijo, disponibilidad, de 1 a 4 **categorías** de plato sin repetir (el cliente elige un plato de cada una) y una lista de **platos excluidos** (lista negra: los platos nuevos de la categoría entran solos).
+
+| Método | Ruta | Roles |
+| --- | --- | --- |
+| `GET` | `/api/v1/public/restaurants/:restaurantId/packs` | público — packs disponibles con `slots: [{ category, dishes }]` (solo platos elegibles); omite los packs con alguna categoría vacía y no expone `excludedDishIds` |
+| `POST` | `/api/v1/restaurants/:restaurantId/packs` | admin, manager (+ `requireRestaurantAccess`) — 201; `InvalidPackError` (400) |
+| `GET` | `/api/v1/restaurants/:restaurantId/packs` | admin, manager (+ `requireRestaurantAccess`) — ordenados por nombre |
+| `GET` | `/api/v1/restaurants/:restaurantId/packs/:id` | admin, manager (+ `requireRestaurantAccess`) — `PackNotFoundError` (404) si es de otro restaurante |
+| `PUT` | `/api/v1/restaurants/:restaurantId/packs/:id` | admin, manager (+ `requireRestaurantAccess`) |
+| `DELETE` | `/api/v1/restaurants/:restaurantId/packs/:id` | admin, manager (+ `requireRestaurantAccess`) — 204 |
+
+Body de gestión: `{ name, description?, price, available?, categories, excludedDishIds? }`; los platos excluidos deben ser del restaurante.
+
+**Pedidos con packs.** `POST /orders` acepta `packs: [{ packId, dishIds, quantity, notes? }]` además de `items` (que pasa a ser opcional si llegan packs; entre ambos, de 1 a 50 líneas, y las unidades de un pack cuentan `quantity × nº de platos` para el máximo de 100). El pack debe existir, ser del restaurante y estar disponible, y `dishIds` debe traer exactamente un plato elegible por categoría; si no, `InvalidOrderError` (400). Cada unidad de pack se guarda como **ítems normales** (un `order_item` por plato, así cocina y barra no cambian) más una fila en `order_item_packs` con `pack_id`, `pack_name`, `pack_instance_id` y `unit_price`. El precio del pack va entero en el primer ítem y 0 en el resto; `getOrderItems` lee `COALESCE(oip.unit_price, d.price) AS dish_price`, de modo que **`BillService` no cambia** y el subtotal (y con él descuentos y puntos) usa el precio del pack. Precio y nombre quedan congelados en el pedido aunque luego se edite o borre el pack. Los ítems de pack añaden `packId`, `packName` y `packInstanceId`; los ítems sueltos no llevan esos campos.
+
 ---
 
 ## Middlewares

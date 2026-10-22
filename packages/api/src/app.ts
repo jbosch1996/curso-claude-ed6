@@ -15,6 +15,8 @@ import pointsRuleRoutes from '@routes/points-rule.routes.js'
 import pointsEarningRoutes from '@routes/points-earning.routes.js'
 import loyaltyRoutes from '@routes/loyalty.routes.js'
 import tableRoutes from '@routes/table.routes.js'
+import packRoutes from '@routes/pack.routes.js'
+import publicPackRoutes from '@routes/pack.public.routes.js'
 import { errorHandler } from '@shared/infrastructure/http/errorHandler.js'
 
 const app = express()
@@ -37,6 +39,8 @@ app.use('/api/v1/restaurants/:restaurantId/points-rules', pointsRuleRoutes)
 app.use('/api/v1/restaurants/:restaurantId/points-earning', pointsEarningRoutes)
 app.use('/api/v1/restaurants/:restaurantId/tables', tableRoutes)
 app.use('/api/v1/restaurants/:restaurantId/employees', restaurantEmployeeRoutes)
+app.use('/api/v1/restaurants/:restaurantId/packs', packRoutes)
+app.use('/api/v1/public/restaurants/:restaurantId/packs', publicPackRoutes)
 
 app.get('/health', (_req, res) => {
     res.status(200).json({ status: 'ok' })

@@ -233,6 +233,43 @@ export class Database {
                 updated_at TEXT NOT NULL,
                 UNIQUE(restaurant_id, number),
                 FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS packs (
+                id TEXT PRIMARY KEY,
+                restaurant_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                price REAL NOT NULL CHECK (price > 0),
+                available INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS pack_categories (
+                pack_id TEXT NOT NULL,
+                category TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                PRIMARY KEY(pack_id, category),
+                FOREIGN KEY(pack_id) REFERENCES packs(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS pack_excluded_dishes (
+                pack_id TEXT NOT NULL,
+                dish_id TEXT NOT NULL,
+                PRIMARY KEY(pack_id, dish_id),
+                FOREIGN KEY(pack_id) REFERENCES packs(id) ON DELETE CASCADE,
+                FOREIGN KEY(dish_id) REFERENCES dishes(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS order_item_packs (
+                order_item_id TEXT PRIMARY KEY,
+                pack_id TEXT NOT NULL,
+                pack_name TEXT NOT NULL,
+                pack_instance_id TEXT NOT NULL,
+                unit_price REAL NOT NULL,
+                FOREIGN KEY(order_item_id) REFERENCES order_items(id) ON DELETE CASCADE
             )
         `.split(';')
 

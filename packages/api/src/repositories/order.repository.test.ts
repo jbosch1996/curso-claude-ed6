@@ -37,6 +37,10 @@ describe('SqliteOrderRepository (Integration)', () => {
             'INSERT INTO dishes (id, name, description, price, category, available, restaurant_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             ['d1', 'Pizza', null, 10, 'principal', 1, 'r1', ahora, ahora]
         )
+        await db.run(
+            'INSERT INTO dishes (id, name, description, price, category, available, restaurant_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            ['d2', 'Agua', null, 2, 'bebida', 1, 'r1', ahora, ahora]
+        )
     })
 
     afterAll(async () => {
@@ -57,5 +61,47 @@ describe('SqliteOrderRepository (Integration)', () => {
         expect(await repo.findById('o-roto')).toBeNull()
         const huerfanos = await db.all('SELECT id FROM order_items WHERE order_id = ?', ['o-roto'])
         expect(huerfanos).toHaveLength(0)
+    })
+
+    describe('ítems de pack', () => {
+        const itemDePack = (id: string, dishId: string, dishPrice: number) => ({
+            id, dishId, quantity: 1, notes: null, status: 'pendiente' as const,
+            dishPrice, packId: 'p1', packName: 'Menú', packInstanceId: 'inst-1'
+        })
+
+        it('guarda los ítems de pack con su precio y los lee con los datos del pack', async () => {
+            const order: Order = {
+                ...pedido('o-pack', ['d1']),
+                items: [
+                    { id: 'o-pack-suelto', dishId: 'd1', quantity: 1, notes: null, status: 'pendiente' },
+                    itemDePack('o-pack-1', 'd1', 15),
+                    itemDePack('o-pack-2', 'd2', 0)
+                ]
+            }
+            await repo.create(order)
+
+            const guardado = await repo.findById('o-pack')
+            const porId = Object.fromEntries(guardado!.items.map(i => [i.id, i]))
+            expect(porId['o-pack-suelto']).toEqual({
+                id: 'o-pack-suelto', dishId: 'd1', quantity: 1, notes: null, status: 'pendiente',
+                dishName: 'Pizza', dishPrice: 10, dishCategory: 'principal'
+            })
+            expect(porId['o-pack-1']).toMatchObject({ dishName: 'Pizza', dishPrice: 15, packId: 'p1', packName: 'Menú', packInstanceId: 'inst-1' })
+            expect(porId['o-pack-2']).toMatchObject({ dishName: 'Agua', dishPrice: 0, packId: 'p1', packName: 'Menú', packInstanceId: 'inst-1' })
+            expect(guardado!.items.reduce((sum, i) => sum + (i.dishPrice ?? 0) * i.quantity, 0)).toBe(25)
+        })
+
+        it('no deja un pedido a medias si falla la inserción de los datos de pack', async () => {
+            const { packName: _sinNombre, ...roto } = itemDePack('o-pr-1', 'd1', 15)
+            await expect(repo.create({ ...pedido('o-pack-roto', []), items: [roto] })).rejects.toThrow()
+            expect(await repo.findById('o-pack-roto')).toBeNull()
+            expect(await db.all('SELECT id FROM order_items WHERE order_id = ?', ['o-pack-roto'])).toHaveLength(0)
+        })
+
+        it('los listados de pedidos también traen los datos del pack', async () => {
+            await repo.create({ ...pedido('o-pack-cliente', []), clientId: 'c-pack', items: [itemDePack('o-pc-1', 'd2', 9)] })
+            const [order] = await repo.findByClientId('c-pack')
+            expect(order!.items[0]).toMatchObject({ dishPrice: 9, packName: 'Menú' })
+        })
     })
 })

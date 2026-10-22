@@ -4,6 +4,9 @@ import { normalizeOrderStatus, assertTransitionAllowed } from '@models/order.mod
 import type { OrderRepository } from '@repositories/order.repository.js'
 import type { DishRepository } from '@repositories/dish.repository.js'
 import type { TableRepository } from '@repositories/table.repository.js'
+import type { PackRepository } from '@repositories/pack.repository.js'
+import type { Dish } from '@models/dish.model.js'
+import { resolvePackSelection } from '@models/pack.model.js'
 import { RestaurantIdRequiredError, OrderNotFoundError, InvalidOrderError } from '@errors/DomainErrors.js'
 
 const MAX_LINES = 50
@@ -12,6 +15,7 @@ const MAX_UNITS_PER_ORDER = 100
 const MAX_NOTES_LENGTH = 200
 const MAX_TABLE_ID_LENGTH = 50
 const EMPLOYEE_ROLES = ['manager', 'camarero', 'cocinero']
+const MAX_DISHES_PER_PACK = 4
 
 export interface OrderActor {
     id: string
@@ -28,13 +32,22 @@ export interface CreateOrderRequest {
         quantity: number
         notes: string | null
     }[]
+    packs?: OrderPackLine[]
+}
+
+export interface OrderPackLine {
+    packId: string
+    dishIds: string[]
+    quantity: number
+    notes?: string | null
 }
 
 export class OrderService {
     constructor(
         private readonly orderRepository: OrderRepository,
         private readonly dishRepository: DishRepository,
-        private readonly tableRepository?: TableRepository
+        private readonly tableRepository?: TableRepository,
+        private readonly packRepository?: PackRepository
     ) {}
 
     async create(request: CreateOrderRequest): Promise<Order> {
@@ -44,11 +57,14 @@ export class OrderService {
 
         this.validateTableId(request.tableId)
         await this.assertTableOccupied(request.restaurantId, request.tableId)
-        this.validateItems(request.items)
-        await this.assertDishesOrderable(request.restaurantId, request.items)
+        const hasPacks = request.packs !== undefined && request.packs !== null
+        const requestItems = hasPacks && (request.items === undefined || request.items === null) ? [] : request.items
+        this.validateItems(requestItems, hasPacks ? request.packs : undefined)
+        await this.assertDishesOrderable(request.restaurantId, requestItems)
+        const packItems = await this.expandPacks(request.restaurantId, request.packs ?? [])
 
         const items: OrderItem[] = []
-        for (const item of request.items) {
+        for (const item of requestItems) {
             for (let i = 0; i < item.quantity; i++) {
                 items.push({
                     id: randomUUID(),
@@ -59,6 +75,7 @@ export class OrderService {
                 })
             }
         }
+        items.push(...packItems)
 
         const order: Order = {
             id: randomUUID(),
@@ -133,28 +150,95 @@ export class OrderService {
         }
     }
 
-    private validateItems(items: unknown): void {
-        if (!Array.isArray(items) || items.length === 0 || items.length > MAX_LINES) {
-            throw new InvalidOrderError(`items must be an array with 1 to ${MAX_LINES} lines`)
+    // Sin packs se mantiene la validación original (items obligatorio); con packs, items puede ir vacío.
+    private validateItems(items: unknown, packs?: unknown): void {
+        if (packs === undefined) {
+            if (!Array.isArray(items) || items.length === 0 || items.length > MAX_LINES) {
+                throw new InvalidOrderError(`items must be an array with 1 to ${MAX_LINES} lines`)
+            }
+        } else {
+            if (!this.packRepository) {
+                throw new InvalidOrderError('Packs are not supported')
+            }
+            if (!Array.isArray(packs)) {
+                throw new InvalidOrderError('packs must be an array')
+            }
+            if (!Array.isArray(items)) {
+                throw new InvalidOrderError('items must be an array')
+            }
+            if (items.length + packs.length === 0 || items.length + packs.length > MAX_LINES) {
+                throw new InvalidOrderError(`An order must have 1 to ${MAX_LINES} lines`)
+            }
         }
 
         let totalUnits = 0
-        for (const item of items) {
+        for (const item of items as any[]) {
             if (!item || typeof item.dishId !== 'string' || item.dishId.trim() === '') {
                 throw new InvalidOrderError('Every item needs a dishId')
             }
-            if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > MAX_QUANTITY_PER_LINE) {
-                throw new InvalidOrderError(`quantity must be an integer between 1 and ${MAX_QUANTITY_PER_LINE}`)
-            }
-            if (item.notes !== null && item.notes !== undefined
-                && (typeof item.notes !== 'string' || item.notes.length > MAX_NOTES_LENGTH)) {
-                throw new InvalidOrderError(`notes must be a string of at most ${MAX_NOTES_LENGTH} characters`)
-            }
+            this.validateQuantityAndNotes(item)
             totalUnits += item.quantity
+        }
+
+        for (const line of (packs ?? []) as any[]) {
+            if (!line || typeof line.packId !== 'string' || line.packId.trim() === '') {
+                throw new InvalidOrderError('Every pack line needs a packId')
+            }
+            if (!Array.isArray(line.dishIds) || line.dishIds.length === 0 || line.dishIds.length > MAX_DISHES_PER_PACK
+                || line.dishIds.some((id: unknown) => typeof id !== 'string')) {
+                throw new InvalidOrderError(`dishIds must be an array of 1 to ${MAX_DISHES_PER_PACK} dish ids`)
+            }
+            this.validateQuantityAndNotes(line)
+            totalUnits += line.quantity * line.dishIds.length
         }
 
         if (totalUnits > MAX_UNITS_PER_ORDER) {
             throw new InvalidOrderError(`An order cannot exceed ${MAX_UNITS_PER_ORDER} units`)
+        }
+    }
+
+    // Cada unidad de pack se convierte en un ítem por plato elegido. El precio del pack va entero
+    // en el primer ítem y 0 en el resto, así la suma de dishPrice del pedido (la cuenta) es correcta.
+    private async expandPacks(restaurantId: string, lines: OrderPackLine[]): Promise<OrderItem[]> {
+        const items: OrderItem[] = []
+        for (const line of lines) {
+            const pack = await this.packRepository!.findById(line.packId)
+            if (!pack || pack.restaurantId !== restaurantId || !pack.available) {
+                throw new InvalidOrderError(`Pack ${line.packId} is not available in this restaurant`)
+            }
+
+            const dishes: Dish[] = []
+            for (const dishId of new Set(line.dishIds)) {
+                const dish = await this.dishRepository.findById(dishId)
+                if (dish) dishes.push(dish)
+            }
+            const selection = resolvePackSelection(pack, line.dishIds, dishes)
+
+            for (let unit = 0; unit < line.quantity; unit++) {
+                const packInstanceId = randomUUID()
+                selection.forEach((dish, index) => items.push({
+                    id: randomUUID(),
+                    dishId: dish.id,
+                    quantity: 1,
+                    notes: line.notes ?? null,
+                    status: 'pendiente',
+                    dishPrice: index === 0 ? pack.price : 0,
+                    packId: pack.id,
+                    packName: pack.name,
+                    packInstanceId
+                }))
+            }
+        }
+        return items
+    }
+
+    private validateQuantityAndNotes(line: { quantity: unknown; notes?: unknown }): void {
+        if (!Number.isInteger(line.quantity) || (line.quantity as number) < 1 || (line.quantity as number) > MAX_QUANTITY_PER_LINE) {
+            throw new InvalidOrderError(`quantity must be an integer between 1 and ${MAX_QUANTITY_PER_LINE}`)
+        }
+        if (line.notes !== null && line.notes !== undefined
+            && (typeof line.notes !== 'string' || line.notes.length > MAX_NOTES_LENGTH)) {
+            throw new InvalidOrderError(`notes must be a string of at most ${MAX_NOTES_LENGTH} characters`)
         }
     }
 

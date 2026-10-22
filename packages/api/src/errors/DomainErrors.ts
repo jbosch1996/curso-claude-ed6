@@ -289,6 +289,19 @@ export class TableOccupiedError extends AppError {
   }
 }
 
+export class PackNotFoundError extends AppError {
+  constructor() {
+    super('Pack not found')
+  }
+}
+
+export class InvalidPackError extends AppError {
+  constructor(message?: string) {
+    super(message ?? 'Invalid pack')
+  }
+}
+
+
 export class InvalidPointsEarningError extends AppError {
   constructor(message?: string) {
     super(message ?? 'Invalid points earning rate')

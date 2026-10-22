@@ -40,10 +40,10 @@ import { Bill, LoyaltySummary } from '../../core/models/bill.model'
           <div class="ticket-divider"></div>
 
           <div class="ticket-items">
-            @for (group of groupedItems(); track group.dishId) {
+            @for (group of groupedItems(); track group.key) {
               <div class="ticket-item">
                 <div class="item-main">
-                  <span class="item-qty">{{ group.count }}x</span>
+                  <span class="item-qty">{{ group.units }}x</span>
                   <span class="item-name">{{ group.dishName || 'Plato' }}</span>
                 </div>
                 <div class="item-status">
@@ -54,7 +54,7 @@ import { Bill, LoyaltySummary } from '../../core/models/bill.model'
                       </span>
                     }
                   </div>
-                  <span class="item-price">{{ (group.dishPrice || 0) * group.count | number:'1.2-2' }} €</span>
+                  <span class="item-price">{{ group.total | number:'1.2-2' }} €</span>
                 </div>
               </div>
             }
@@ -395,35 +395,40 @@ export class OrderDetailComponent implements OnInit, OnDestroy {
     return status?.value || 'pendiente'
   }
 
+  // Los platos sueltos se agrupan por plato; los de un pack, por unidad de pack (con su precio).
   groupedItems = computed(() => {
     const items = this.order()?.items || []
-    const groups = new Map<string, { dishId: string; dishName: string; dishPrice: number; statusCounts: { status: string; count: number }[] }>()
+    const groups = new Map<string, { key: string; dishName: string; units: number; total: number; statusCounts: { status: string; count: number }[] }>()
 
     for (const item of items) {
       const itemStatus = this.getStatusString(item.status)
-      const key = item.dishId
+      const key = item.packInstanceId ? `pack:${item.packInstanceId}` : item.dishId
       const existing = groups.get(key)
-
-      if (existing) {
-        const statusIdx = existing.statusCounts.findIndex(s => s.status === itemStatus)
-        if (statusIdx >= 0) {
-          existing.statusCounts[statusIdx].count++
-        } else {
-          existing.statusCounts.push({ status: itemStatus, count: 1 })
-        }
-      } else {
-        groups.set(key, {
-          dishId: item.dishId,
-          dishName: item.dishName || 'Plato',
-          dishPrice: item.dishPrice || 0,
-          statusCounts: [{ status: itemStatus, count: 1 }]
-        })
+      const group = existing ?? {
+        key,
+        dishName: item.packInstanceId ? `${item.packName || 'Pack'}:` : (item.dishName || 'Plato'),
+        units: 0,
+        total: 0,
+        statusCounts: []
       }
+
+      if (item.packInstanceId) {
+        group.dishName += `${existing ? ' ·' : ''} ${item.dishName || 'Plato'}`
+        group.units = 1
+      } else {
+        group.units += item.quantity
+      }
+      group.total += (item.dishPrice || 0) * item.quantity
+
+      const statusCount = group.statusCounts.find(sc => sc.status === itemStatus)
+      if (statusCount) {
+        statusCount.count++
+      } else {
+        group.statusCounts.push({ status: itemStatus, count: 1 })
+      }
+      groups.set(key, group)
     }
 
-    return Array.from(groups.values()).map(group => ({
-      ...group,
-      count: group.statusCounts.reduce((sum, s) => sum + s.count, 0)
-    }))
+    return Array.from(groups.values())
   })
 }

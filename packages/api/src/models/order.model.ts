@@ -13,6 +13,9 @@ export interface OrderItem {
     dishName?: string
     dishPrice?: number
     dishCategory?: string
+    packId?: string
+    packName?: string
+    packInstanceId?: string
 }
 
 export interface Order {
