@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core'
 import { firstValueFrom } from 'rxjs'
 import { DiscountService } from '../services/discount.service'
-import type { DiscountCode, CreateDiscountCodeDto, PointsRule, CreatePointsRuleDto } from '../models/discount.model'
+import type { DiscountCode, CreateDiscountCodeDto, PointsRule, CreatePointsRuleDto, PointsEarningRate, UpdatePointsEarningDto } from '../models/discount.model'
 
 @Injectable({ providedIn: 'root' })
 export class DiscountStore {
@@ -9,11 +9,13 @@ export class DiscountStore {
 
   private readonly _codes = signal<DiscountCode[]>([])
   private readonly _rules = signal<PointsRule[]>([])
+  private readonly _earning = signal<PointsEarningRate | null>(null)
   private readonly _loading = signal(false)
   private readonly _error = signal<string | null>(null)
 
   readonly codes = this._codes.asReadonly()
   readonly rules = this._rules.asReadonly()
+  readonly earning = this._earning.asReadonly()
   readonly loading = this._loading.asReadonly()
   readonly error = this._error.asReadonly()
 
@@ -69,5 +71,13 @@ export class DiscountStore {
   async deleteRule(restaurantId: string, id: string): Promise<void> {
     await firstValueFrom(this.service.deleteRule(restaurantId, id))
     this._rules.update(list => list.filter(r => r.id !== id))
+  }
+
+  async loadEarning(restaurantId: string): Promise<void> {
+    this._earning.set(await firstValueFrom(this.service.getEarning(restaurantId)))
+  }
+
+  async updateEarning(restaurantId: string, dto: UpdatePointsEarningDto): Promise<void> {
+    this._earning.set(await firstValueFrom(this.service.updateEarning(restaurantId, dto)))
   }
 }

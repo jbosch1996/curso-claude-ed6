@@ -3,8 +3,40 @@
     <h1>Puntos de fidelidad</h1>
   </div>
   <p class="subtitle">
-    Los clientes ganan 1 punto por cada euro de su cuenta y pueden canjearlos por los descuentos que definas aquí.
+    Los clientes ganan puntos al pedir la cuenta según el ritmo que configures y pueden canjearlos por los descuentos que definas aquí.
   </p>
+
+  <form (ngSubmit)="onSubmitEarning()" class="card rule-form">
+    <h3>Ganancia de puntos</h3>
+    <p class="hint">
+      Por cada bloque completo de euros pagados (tras descuentos) el cliente gana los puntos indicados.
+      @if (store.earning()?.isDefault) {
+        Ahora se aplica el valor por defecto: 1 punto por cada euro.
+      }
+    </p>
+
+    @if (earningError()) {
+      <div class="alert-error">{{ earningError() }}</div>
+    }
+    @if (earningSaved()) {
+      <div class="saved">Ganancia de puntos guardada.</div>
+    }
+
+    <div class="rule-row">
+      <div class="form-group">
+        <label for="earning-amount">Por cada (€)</label>
+        <input id="earning-amount" type="number" class="form-control" [(ngModel)]="earningForm.amount" name="earningAmount" required min="0.01" max="10000" step="0.01" />
+      </div>
+      <span class="equals">→</span>
+      <div class="form-group">
+        <label for="earning-points">Puntos</label>
+        <input id="earning-points" type="number" class="form-control" [(ngModel)]="earningForm.points" name="earningPoints" required min="1" max="10000" step="1" />
+      </div>
+      <div class="rule-actions">
+        <button type="submit" class="btn btn-primary" [disabled]="earningSaving()">Guardar</button>
+      </div>
+    </div>
+  </form>
 
   <form (ngSubmit)="onSubmit()" class="card rule-form">
     <h3>{{ editingId() ? 'Editar equivalencia' : 'Nueva equivalencia' }}</h3>

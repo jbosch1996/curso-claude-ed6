@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms'
 import { ActivatedRoute } from '@angular/router'
 import { LucideAngularModule } from 'lucide-angular'
 import { DiscountStore } from '../../store/discount.store'
-import type { CreatePointsRuleDto, PointsRule } from '../../models/discount.model'
+import type { CreatePointsRuleDto, PointsRule, UpdatePointsEarningDto } from '../../models/discount.model'
 
 @Component({
   selector: 'app-points-rules',
@@ -23,10 +23,41 @@ export class PointsRulesComponent implements OnInit {
 
   form: CreatePointsRuleDto = { points: 10, discount: 1 }
 
+  earningForm: UpdatePointsEarningDto = { amount: 1, points: 1 }
+  earningSaving = signal(false)
+  earningError = signal<string | null>(null)
+  earningSaved = signal(false)
+
   ngOnInit(): void {
     this.restaurantId = this.route.parent?.snapshot.params['restaurantId'] ?? ''
     if (this.restaurantId) {
       this.store.loadRules(this.restaurantId)
+      this.loadEarning()
+    }
+  }
+
+  async loadEarning(): Promise<void> {
+    try {
+      await this.store.loadEarning(this.restaurantId)
+      const earning = this.store.earning()
+      if (earning) this.earningForm = { amount: earning.amount, points: earning.points }
+    } catch {
+      this.earningError.set('No se pudo cargar la ganancia de puntos.')
+    }
+  }
+
+  async onSubmitEarning(): Promise<void> {
+    if (!this.restaurantId) return
+    this.earningError.set(null)
+    this.earningSaved.set(false)
+    this.earningSaving.set(true)
+    try {
+      await this.store.updateEarning(this.restaurantId, this.earningForm)
+      this.earningSaved.set(true)
+    } catch (err: any) {
+      this.earningError.set(err?.error?.message ?? 'Error al guardar la ganancia de puntos.')
+    } finally {
+      this.earningSaving.set(false)
     }
   }
 

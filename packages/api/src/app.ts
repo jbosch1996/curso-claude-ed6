@@ -12,6 +12,7 @@ import orderRoutes from '@routes/order.routes.js'
 import billRoutes from '@routes/bill.routes.js'
 import discountCodeRoutes from '@routes/discount-code.routes.js'
 import pointsRuleRoutes from '@routes/points-rule.routes.js'
+import pointsEarningRoutes from '@routes/points-earning.routes.js'
 import loyaltyRoutes from '@routes/loyalty.routes.js'
 import tableRoutes from '@routes/table.routes.js'
 import packRoutes from '@routes/pack.routes.js'
@@ -35,6 +36,7 @@ app.use('/api/v1/restaurants/:restaurantId/ingredients', ingredientRoutes)
 app.use('/api/v1/restaurants/:restaurantId/dishes', dishRoutes)
 app.use('/api/v1/restaurants/:restaurantId/discount-codes', discountCodeRoutes)
 app.use('/api/v1/restaurants/:restaurantId/points-rules', pointsRuleRoutes)
+app.use('/api/v1/restaurants/:restaurantId/points-earning', pointsEarningRoutes)
 app.use('/api/v1/restaurants/:restaurantId/tables', tableRoutes)
 app.use('/api/v1/restaurants/:restaurantId/employees', restaurantEmployeeRoutes)
 app.use('/api/v1/restaurants/:restaurantId/packs', packRoutes)

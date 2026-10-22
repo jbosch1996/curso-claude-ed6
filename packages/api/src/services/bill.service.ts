@@ -10,6 +10,8 @@ import type { BillRepository } from '@repositories/bill.repository.js'
 import type { DiscountCodeRepository } from '@repositories/discount-code.repository.js'
 import type { PointsRuleRepository } from '@repositories/points-rule.repository.js'
 import type { ClientPointsRepository } from '@repositories/client-points.repository.js'
+import type { PointsEarningRepository } from '@repositories/points-earning.repository.js'
+import { DEFAULT_POINTS_EARNING } from '@models/points-earning.model.js'
 import type { OrderActor } from '@services/order.service.js'
 import {
     OrderNotFoundError, BillNotFoundError, BillAlreadyRequestedError, InvalidBillError,
@@ -29,7 +31,9 @@ export class BillService {
         private readonly billRepository: BillRepository,
         private readonly discountCodeRepository: DiscountCodeRepository,
         private readonly pointsRuleRepository: PointsRuleRepository,
-        private readonly clientPointsRepository: ClientPointsRepository
+        private readonly clientPointsRepository: ClientPointsRepository,
+        // Opcional: sin repositorio se usa el ritmo por defecto (1 punto por euro).
+        private readonly pointsEarningRepository?: PointsEarningRepository
     ) {}
 
     async create(orderId: string, actor: OrderActor, input: RequestBillInput): Promise<Bill> {
@@ -53,6 +57,7 @@ export class BillService {
         const pointsDiscount = rule ? rule.discount : 0
 
         const total = computeTotal(subtotal, codeDiscount, pointsDiscount)
+        const earningRate = await this.pointsEarningRepository?.findByRestaurantId(order.restaurantId) ?? DEFAULT_POINTS_EARNING
         const bill: Bill = {
             id: randomUUID(),
             orderId,
@@ -64,7 +69,7 @@ export class BillService {
             pointsUsed: rule?.points ?? 0,
             pointsDiscount,
             total,
-            pointsEarned: earnedPoints(total),
+            pointsEarned: earnedPoints(total, earningRate),
             createdAt: new Date().toISOString()
         }
 

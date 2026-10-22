@@ -300,3 +300,10 @@ export class InvalidPackError extends AppError {
     super(message ?? 'Invalid pack')
   }
 }
+
+
+export class InvalidPointsEarningError extends AppError {
+  constructor(message?: string) {
+    super(message ?? 'Invalid points earning rate')
+  }
+}

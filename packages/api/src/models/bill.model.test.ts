@@ -39,6 +39,17 @@ describe('earnedPoints', () => {
         expect(earnedPoints(0.99)).toBe(0)
         expect(earnedPoints(0)).toBe(0)
     })
+
+    it('aplica el ritmo del restaurante: Y puntos por cada bloque completo de X €', () => {
+        expect(earnedPoints(25.99, { amount: 10, points: 3 })).toBe(6)
+        expect(earnedPoints(30, { amount: 10, points: 3 })).toBe(9)
+        expect(earnedPoints(9.99, { amount: 10, points: 3 })).toBe(0)
+    })
+
+    it('calcula en céntimos, sin errores de coma flotante', () => {
+        expect(earnedPoints(0.3, { amount: 0.1, points: 1 })).toBe(3)
+        expect(earnedPoints(22.5, { amount: 2.5, points: 2 })).toBe(18)
+    })
 })
 
 describe('computeTotal', () => {

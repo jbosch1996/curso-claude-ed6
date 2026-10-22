@@ -18,6 +18,7 @@ erDiagram
     restaurants ||--o{ discount_codes : "ofrece"
     restaurants ||--o{ points_rules : "define"
     restaurants ||--o{ client_points : "acumula"
+    restaurants ||--o| points_earning_rates : "configura"
     orders ||--o| bills : "tiene"
     restaurants ||--o{ restaurant_tables : "tiene"
     dishes ||--o{ order_items : "pedido como"
@@ -114,6 +115,13 @@ erDiagram
         TEXT client_id PK
         TEXT restaurant_id PK_FK
         INTEGER balance
+    }
+
+    points_earning_rates {
+        TEXT restaurant_id PK_FK
+        REAL amount
+        INTEGER points
+        TEXT updated_at
     }
 
     bills {
@@ -321,6 +329,21 @@ Saldo de puntos de un cliente en un restaurante.
 
 ---
 
+### `points_earning_rates`
+
+Ritmo de ganancia de puntos de un restaurante: por cada `amount` € pagados (bloques completos) el cliente gana `points` puntos. Opcional: un restaurante sin fila gana 1 punto por euro.
+
+| Columna | Tipo | Nullable | Descripción |
+| --- | --- | --- | --- |
+| `restaurant_id` | TEXT | No | Clave primaria y FK → `restaurants.id` |
+| `amount` | REAL | No | Euros por bloque (X); `CHECK(amount > 0)` |
+| `points` | INTEGER | No | Puntos por bloque (Y); `CHECK(points > 0)` |
+| `updated_at` | TEXT | No | Fecha de la última modificación |
+
+**Restricciones:** una fila por restaurante (clave primaria `restaurant_id`).
+
+---
+
 ### `bills`
 
 Cuenta pedida por el cliente para un pedido, con el desglose de descuentos.
@@ -337,7 +360,7 @@ Cuenta pedida por el cliente para un pedido, con el desglose de descuentos.
 | `points_used` | INTEGER | No | Puntos canjeados |
 | `points_discount` | REAL | No | Euros descontados por los puntos |
 | `total` | REAL | No | Importe final (nunca negativo) |
-| `points_earned` | INTEGER | No | Puntos ganados (`floor(total)`) |
+| `points_earned` | INTEGER | No | Puntos ganados con el ritmo del restaurante en ese momento (`floor(total / amount) * points`; por defecto `floor(total)`) |
 | `created_at` | TEXT | No | Fecha |
 
 **Restricciones:** `UNIQUE(order_id)` (una cuenta por pedido) y ON DELETE CASCADE desde `orders.id`.

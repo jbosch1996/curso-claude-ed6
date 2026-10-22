@@ -214,6 +214,14 @@ export class Database {
                 FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
             );
 
+            CREATE TABLE IF NOT EXISTS points_earning_rates (
+                restaurant_id TEXT PRIMARY KEY,
+                amount REAL NOT NULL CHECK (amount > 0),
+                points INTEGER NOT NULL CHECK (points > 0),
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
+            );
+
             CREATE TABLE IF NOT EXISTS restaurant_tables (
                 id TEXT PRIMARY KEY,
                 restaurant_id TEXT NOT NULL,
