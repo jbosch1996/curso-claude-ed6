@@ -6,6 +6,8 @@ import { MockTableRepository } from '@repositories/mocks/MockTableRepository.js'
 import type { Table } from '@models/table.model.js'
 import type { Order } from '@models/order.model.js'
 import type { Dish } from '@models/dish.model.js'
+import type { Pack } from '@models/pack.model.js'
+import { MockPackRepository } from '@repositories/mocks/MockPackRepository.js'
 import {
     OrderNotFoundError,
     InvalidOrderStatusError,
@@ -291,5 +293,130 @@ describe('OrderService.create con mesas', () => {
             return dishRepo
         })())
         await expect(sinMesas.create(pedido('cualquier-texto'))).resolves.toBeDefined()
+    })
+})
+
+describe('OrderService.create con packs', () => {
+    let repo: MockOrderRepository
+    let dishRepo: MockDishRepository
+    let packRepo: MockPackRepository
+    let service: OrderService
+
+    const lineaPack = (extra: Record<string, unknown> = {}) => ({
+        packId: 'pack-1', dishIds: ['ensalada', 'pizza', 'agua'], quantity: 1, notes: null, ...extra
+    })
+
+    const pedido = (packs: unknown, items: unknown = undefined) => ({
+        restaurantId: 'rest-1',
+        tableId: null,
+        clientId: 'cliente-1',
+        items: items as { dishId: string; quantity: number; notes: string | null }[],
+        packs: packs as any
+    })
+
+    const pack = (overrides: Partial<Pack> = {}): Pack => ({
+        id: 'pack-1', restaurantId: 'rest-1', name: 'Menú del día', description: null, price: 18, available: true,
+        categories: ['entrante', 'principal', 'bebida'], excludedDishIds: ['cerveza'], createdAt: '', updatedAt: '',
+        ...overrides
+    })
+
+    beforeEach(async () => {
+        repo = new MockOrderRepository()
+        dishRepo = new MockDishRepository()
+        packRepo = new MockPackRepository()
+        service = new OrderService(repo, dishRepo, undefined, packRepo)
+
+        await dishRepo.save(plato('ensalada', 'rest-1', { name: 'Ensalada', price: 9, category: 'entrante' }))
+        await dishRepo.save(plato('pizza', 'rest-1', { name: 'Pizza', price: 12.5, category: 'principal' }))
+        await dishRepo.save(plato('agua', 'rest-1', { name: 'Agua', price: 2, category: 'bebida' }))
+        await dishRepo.save(plato('cerveza', 'rest-1', { name: 'Cerveza', price: 3, category: 'bebida' }))
+        await packRepo.save(pack())
+        await packRepo.save(pack({ id: 'pack-ajeno', restaurantId: 'rest-2' }))
+        await packRepo.save(pack({ id: 'pack-oculto', available: false }))
+    })
+
+    describe('validación de la forma', () => {
+        it('rechaza packs que no es un array', async () => {
+            await expect(service.create(pedido('hola'))).rejects.toThrow('packs must be an array')
+        })
+
+        it('rechaza un pedido sin items ni packs', async () => {
+            await expect(service.create(pedido([], []))).rejects.toThrow('An order must have 1 to 50 lines')
+        })
+
+        it('rechaza más de 50 líneas sumando items y packs', async () => {
+            const items = Array.from({ length: 50 }, () => ({ dishId: 'pizza', quantity: 1, notes: null }))
+            await expect(service.create(pedido([lineaPack()], items))).rejects.toThrow('An order must have 1 to 50 lines')
+        })
+
+        it.each([
+            ['sin packId', { packId: '' }, 'Every pack line needs a packId'],
+            ['con packId no texto', { packId: 5 }, 'Every pack line needs a packId'],
+            ['con cantidad 0', { quantity: 0 }, 'quantity must be an integer between 1 and 20'],
+            ['con cantidad 21', { quantity: 21 }, 'quantity must be an integer between 1 and 20'],
+            ['con cantidad decimal', { quantity: 1.5 }, 'quantity must be an integer between 1 and 20'],
+            ['con notas demasiado largas', { notes: 'x'.repeat(201) }, 'notes must be a string of at most 200 characters'],
+            ['con notas no texto', { notes: 5 }, 'notes must be a string of at most 200 characters'],
+            ['sin dishIds', { dishIds: 'ensalada' }, 'dishIds must be an array of 1 to 4 dish ids'],
+            ['con más de 4 platos', { dishIds: ['a', 'b', 'c', 'd', 'e'] }, 'dishIds must be an array of 1 to 4 dish ids']
+        ])('rechaza una línea de pack %s', async (_caso, extra, mensaje) => {
+            await expect(service.create(pedido([lineaPack(extra)]))).rejects.toThrow(mensaje)
+            expect(repo.orders).toHaveLength(0)
+        })
+
+        it('cuenta como unidades los platos de cada pack (máximo 100)', async () => {
+            // 2 líneas × 20 packs × 3 platos = 120 unidades
+            await expect(service.create(pedido([lineaPack({ quantity: 20 }), lineaPack({ quantity: 20 })])))
+                .rejects.toThrow('An order cannot exceed 100 units')
+        })
+
+        it('rechaza packs si el servicio no tiene repositorio de packs', async () => {
+            const sinPacks = new OrderService(repo, dishRepo)
+            await expect(sinPacks.create(pedido([lineaPack()]))).rejects.toThrow('Packs are not supported')
+        })
+    })
+
+    describe('resolución y expansión', () => {
+        it.each([
+            ['inexistente', 'pack-nope'],
+            ['de otro restaurante', 'pack-ajeno'],
+            ['no disponible', 'pack-oculto']
+        ])('rechaza un pack %s', async (_caso, packId) => {
+            await expect(service.create(pedido([lineaPack({ packId })]))).rejects.toThrow(`Pack ${packId} is not available in this restaurant`)
+            expect(repo.orders).toHaveLength(0)
+        })
+
+        it('rechaza una selección con un plato excluido', async () => {
+            await expect(service.create(pedido([lineaPack({ dishIds: ['ensalada', 'pizza', 'cerveza'] })])))
+                .rejects.toThrow('Dish cerveza cannot be chosen in pack pack-1')
+            expect(repo.orders).toHaveLength(0)
+        })
+
+        it('rechaza una selección que no cubre todas las categorías', async () => {
+            await expect(service.create(pedido([lineaPack({ dishIds: ['ensalada', 'pizza'] })])))
+                .rejects.toThrow('Pack pack-1 needs exactly one dish per category: entrante, principal, bebida')
+        })
+
+        it('expande cada pack en un ítem por plato con el precio del pack en el primero', async () => {
+            const order = await service.create(pedido([lineaPack({ dishIds: ['agua', 'pizza', 'ensalada'], quantity: 2, notes: 'sin hielo' })]))
+
+            expect(order.items).toHaveLength(6)
+            const instancias = [...new Set(order.items.map(i => i.packInstanceId))]
+            expect(instancias).toHaveLength(2)
+            for (const instancia of instancias) {
+                const items = order.items.filter(i => i.packInstanceId === instancia)
+                expect(items.map(i => i.dishId)).toEqual(['ensalada', 'pizza', 'agua'])
+                expect(items.map(i => i.dishPrice)).toEqual([18, 0, 0])
+                expect(items.every(i => i.packId === 'pack-1' && i.packName === 'Menú del día')).toBe(true)
+                expect(items.every(i => i.quantity === 1 && i.status === 'pendiente' && i.notes === 'sin hielo')).toBe(true)
+            }
+            expect(repo.orders).toHaveLength(1)
+        })
+
+        it('combina platos sueltos y packs en el mismo pedido', async () => {
+            const order = await service.create(pedido([lineaPack()], [{ dishId: 'cerveza', quantity: 2, notes: null }]))
+            expect(order.items).toHaveLength(5)
+            expect(order.items.filter(i => i.packInstanceId === undefined).map(i => i.dishId)).toEqual(['cerveza', 'cerveza'])
+        })
     })
 })

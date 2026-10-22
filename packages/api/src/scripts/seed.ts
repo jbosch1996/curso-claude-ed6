@@ -230,6 +230,20 @@ const seed = async () => {
 
         console.log('Sample tables created')
 
+        const packNow = new Date().toISOString()
+        await dbConfig.run(`
+            INSERT OR IGNORE INTO packs (id, restaurant_id, name, description, price, available, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, ['rest-1-menu-del-dia', 'rest-1', 'Menú del día', 'Entrante, principal y bebida a elegir', 18, 1, packNow, packNow])
+        for (const [position, category] of ['entrante', 'principal', 'bebida'].entries()) {
+            await dbConfig.run('INSERT OR IGNORE INTO pack_categories (pack_id, category, position) VALUES (?, ?, ?)', ['rest-1-menu-del-dia', category, position])
+        }
+        if (drink1Id) {
+            await dbConfig.run('INSERT OR IGNORE INTO pack_excluded_dishes (pack_id, dish_id) VALUES (?, ?)', ['rest-1-menu-del-dia', drink1Id])
+        }
+
+        console.log('Sample pack created (Menú del día, 18 €, sin Refresco de Cola)')
+
         console.log('\n=== Seed completado ===')
         console.log('\nEmpleados:')
         console.log('  Admin: admin@resttek.com / admin@resttek.com')

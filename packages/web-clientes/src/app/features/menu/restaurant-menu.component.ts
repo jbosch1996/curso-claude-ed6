@@ -3,6 +3,8 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router'
 import { DecimalPipe } from '@angular/common'
 import { LucideAngularModule } from 'lucide-angular'
 import { DishService } from '../../core/services/dish.service'
+import { PackService } from '../../core/services/pack.service'
+import { PublicPack } from '../../core/models/pack.model'
 import { RestaurantService } from '../../core/services/restaurant.service'
 import { CartStore, Dish } from '../../core/store/cart.store'
 import { Restaurant } from '../../core/models/restaurant.model'
@@ -30,6 +32,43 @@ import { Restaurant } from '../../core/models/restaurant.model'
       } @else {
         <div class="menu-layout">
           <div class="menu-content">
+            @if (packs().length > 0) {
+              <div class="category-section">
+                <h2 class="category-title">Packs</h2>
+                <div class="dishes-grid">
+                  @for (pack of packs(); track pack.id) {
+                    <div class="dish-card pack-card card">
+                      <div class="dish-info">
+                        <h3>{{ pack.name }}</h3>
+                        @if (pack.description) {
+                          <p class="dish-description">{{ pack.description }}</p>
+                        }
+                        <p class="dish-price">{{ pack.price | number:'1.2-2' }} €</p>
+                        <div class="pack-slots">
+                          @for (slot of pack.slots; track slot.category) {
+                            <label class="pack-slot">
+                              <span class="pack-slot-label">{{ slot.category }}</span>
+                              <select class="form-control" [value]="getSelection(pack.id, slot.category)"
+                                      (change)="select(pack.id, slot.category, $any($event.target).value)">
+                                <option value="">Elige...</option>
+                                @for (dish of slot.dishes; track dish.id) {
+                                  <option [value]="dish.id">{{ dish.name }}</option>
+                                }
+                              </select>
+                            </label>
+                          }
+                        </div>
+                      </div>
+                      <div class="dish-actions">
+                        <button class="btn btn-primary btn-sm" [disabled]="!isPackComplete(pack)" (click)="addPackToCart(pack)">
+                          Añadir pack
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
             @for (category of categories(); track category) {
               <div class="category-section">
                 <h2 class="category-title">{{ category }}</h2>
@@ -62,10 +101,16 @@ import { Restaurant } from '../../core/models/restaurant.model'
 
           <aside class="cart-summary card">
             <h3>Tu pedido</h3>
-            @if (cartStore.items().length === 0) {
+            @if (cartStore.isEmpty()) {
               <p class="empty-cart">Tu carrito está vacío</p>
             } @else {
               <div class="cart-items">
+                @for (line of cartStore.packs(); track line.key) {
+                  <div class="cart-item">
+                    <span class="item-name">{{ line.pack.name }} x{{ line.quantity }}</span>
+                    <span class="item-price">{{ line.pack.price * line.quantity | number:'1.2-2' }} €</span>
+                  </div>
+                }
                 @for (item of cartStore.items(); track item.dish.id) {
                   <div class="cart-item">
                     <span class="item-name">{{ item.dish.name }} x{{ item.quantity }}</span>
@@ -206,6 +251,25 @@ import { Restaurant } from '../../core/models/restaurant.model'
     .item-price {
       color: var(--text-primary);
     }
+    .pack-card {
+      align-items: flex-end;
+    }
+    .pack-slots {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .pack-slot {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 13px;
+    }
+    .pack-slot-label {
+      color: var(--text-muted);
+      text-transform: capitalize;
+    }
     .cart-total {
       display: flex;
       justify-content: space-between;
@@ -219,11 +283,15 @@ export class RestaurantMenuComponent implements OnInit {
   private readonly route = inject(ActivatedRoute)
   private readonly router = inject(Router)
   private readonly dishService = inject(DishService)
+  private readonly packService = inject(PackService)
   private readonly restaurantService = inject(RestaurantService)
   readonly cartStore = inject(CartStore)
 
   readonly restaurant = signal<Restaurant | null>(null)
   readonly dishes = signal<Dish[]>([])
+  readonly packs = signal<PublicPack[]>([])
+  /** Plato elegido por pack y categoría: selections[packId][category] = dishId. */
+  private readonly selections = signal<Record<string, Record<string, string>>>({})
   readonly loading = signal(true)
   readonly error = signal<string | null>(null)
   private quantities = signal<Record<string, number>>({})
@@ -253,6 +321,10 @@ export class RestaurantMenuComponent implements OnInit {
   private loadData(restaurantId: string): void {
     this.restaurantService.getById(restaurantId).subscribe({
       next: (restaurant) => this.restaurant.set(restaurant),
+      error: () => {}
+    })
+    this.packService.getByRestaurant(restaurantId).subscribe({
+      next: (packs) => this.packs.set(packs),
       error: () => {}
     })
     this.dishService.getByRestaurant(restaurantId).subscribe({
@@ -290,5 +362,24 @@ export class RestaurantMenuComponent implements OnInit {
     const quantity = this.getQuantity(dish.id)
     this.cartStore.addItem(dish, quantity)
     this.quantities.update(q => ({ ...q, [dish.id]: 1 }))
+  }
+
+  getSelection(packId: string, category: string): string {
+    return this.selections()[packId]?.[category] ?? ''
+  }
+
+  select(packId: string, category: string, dishId: string): void {
+    this.selections.update(sel => ({ ...sel, [packId]: { ...sel[packId], [category]: dishId } }))
+  }
+
+  isPackComplete(pack: PublicPack): boolean {
+    return pack.slots.every(slot => this.getSelection(pack.id, slot.category) !== '')
+  }
+
+  addPackToCart(pack: PublicPack): void {
+    if (!this.isPackComplete(pack)) return
+    const dishes = pack.slots.map(slot => slot.dishes.find(d => d.id === this.getSelection(pack.id, slot.category))!)
+    this.cartStore.addPack(this.route.snapshot.paramMap.get('id')!, pack, dishes)
+    this.selections.update(sel => ({ ...sel, [pack.id]: {} }))
   }
 }

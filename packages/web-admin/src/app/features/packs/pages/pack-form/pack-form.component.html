@@ -1,0 +1,80 @@
+<div class="fade-in">
+  <div class="page-header">
+    <div class="header-back">
+      <a [routerLink]="listUrl" class="back-link">
+        <lucide-icon name="chevron-left" [size]="18"></lucide-icon>
+      </a>
+      <h1>{{ pageTitle }}</h1>
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="alert-error">{{ error() }}</div>
+  }
+
+  <form (ngSubmit)="onSubmit()" class="card form-card">
+    <div class="form-grid">
+      <div class="form-group form-full">
+        <label for="name">Nombre</label>
+        <input id="name" type="text" class="form-control" [(ngModel)]="form.name" name="name" required maxlength="100" placeholder="Menú del día" />
+      </div>
+
+      <div class="form-group">
+        <label for="price">Precio del pack (€)</label>
+        <input id="price" type="number" class="form-control" [(ngModel)]="form.price" name="price" required min="0.01" step="0.01" />
+      </div>
+
+      <div class="form-group">
+        <label for="available">Disponible</label>
+        <select id="available" class="form-control" [(ngModel)]="form.available" name="available">
+          <option [ngValue]="true">Sí</option>
+          <option [ngValue]="false">No</option>
+        </select>
+      </div>
+
+      <div class="form-group form-full">
+        <label for="description">Descripción (opcional)</label>
+        <input id="description" type="text" class="form-control" [(ngModel)]="form.description" name="description" maxlength="300" placeholder="Entrante, principal y bebida a elegir" />
+      </div>
+
+      <div class="form-group form-full">
+        <label>Categorías del pack (el cliente elige un plato de cada una)</label>
+        <div class="category-options">
+          @for (c of allCategories; track c.value) {
+            <label class="check">
+              <input type="checkbox" [checked]="isCategorySelected(c.value)" (change)="toggleCategory(c.value)" />
+              {{ c.label }}
+            </label>
+          }
+        </div>
+      </div>
+    </div>
+
+    @for (c of selectedCategories(); track c.value) {
+      <fieldset class="dish-group">
+        <legend>{{ c.label }}: platos elegibles</legend>
+        @if (c.dishes.length === 0) {
+          <p class="hint">No hay platos de esta categoría en el restaurante.</p>
+        } @else {
+          @for (d of c.dishes; track d.id) {
+            <label class="check">
+              <input type="checkbox" [checked]="isEligible(d.id)" (change)="toggleEligible(d.id)" />
+              {{ d.name }} <span class="hint">({{ d.price | number:'1.2-2' }} €{{ d.available ? '' : ', no disponible' }})</span>
+            </label>
+          }
+        }
+      </fieldset>
+    }
+
+    <div class="form-actions">
+      <a [routerLink]="listUrl" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary" [disabled]="loading()">
+        @if (loading()) {
+          Guardando...
+        } @else {
+          Guardar
+        }
+      </button>
+    </div>
+  </form>
+</div>

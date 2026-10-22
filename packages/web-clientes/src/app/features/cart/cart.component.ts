@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core'
 import { Router, RouterLink } from '@angular/router'
 import { DecimalPipe } from '@angular/common'
-import { CartStore } from '../../core/store/cart.store'
+import { CartStore, CartPack } from '../../core/store/cart.store'
 import { OrderService } from '../../core/services/order.service'
 
 @Component({
@@ -14,7 +14,7 @@ import { OrderService } from '../../core/services/order.service'
         <h1>Tu pedido</h1>
       </div>
 
-      @if (cartStore.items().length === 0) {
+      @if (cartStore.isEmpty()) {
         <div class="empty-state card">
           <p>Tu carrito está vacío</p>
           <a routerLink="/restaurants" class="btn btn-primary" style="margin-top: 16px;">
@@ -24,6 +24,24 @@ import { OrderService } from '../../core/services/order.service'
       } @else {
         <div class="cart-layout">
           <div class="cart-items">
+            @for (line of cartStore.packs(); track line.key) {
+              <div class="cart-item card">
+                <div class="item-info">
+                  <h3>{{ line.pack.name }}</h3>
+                  <p class="item-price">{{ packDishNames(line) }}</p>
+                  <p class="item-price">{{ line.pack.price | number:'1.2-2' }} € / pack</p>
+                </div>
+                <div class="item-controls">
+                  <div class="quantity-selector">
+                    <button class="qty-btn" (click)="cartStore.updatePackQuantity(line.key, line.quantity - 1)">-</button>
+                    <span>{{ line.quantity }}</span>
+                    <button class="qty-btn" (click)="cartStore.updatePackQuantity(line.key, line.quantity + 1)">+</button>
+                  </div>
+                  <span class="item-subtotal">{{ line.pack.price * line.quantity | number:'1.2-2' }} €</span>
+                  <button class="btn btn-danger btn-sm" (click)="cartStore.removePack(line.key)">Eliminar</button>
+                </div>
+              </div>
+            }
             @for (item of cartStore.items(); track item.dish.id) {
               <div class="cart-item card">
                 <div class="item-info">
@@ -194,9 +212,13 @@ export class CartComponent {
     this.cartStore.removeItem(dishId)
   }
 
+  packDishNames(line: CartPack): string {
+    return line.dishes.map(d => d.name).join(' · ')
+  }
+
   confirmOrder(): void {
     const restaurantId = this.cartStore.restaurantId()
-    if (!restaurantId || this.cartStore.items().length === 0) return
+    if (!restaurantId || this.cartStore.isEmpty()) return
 
     this.loading.set(true)
     this.error.set(null)
@@ -207,7 +229,13 @@ export class CartComponent {
       notes: item.notes || null
     }))
 
-    this.orderService.createOrder(restaurantId, items, this.cartStore.tableIdFor(restaurantId)).subscribe({
+    const packs = this.cartStore.packs().map(line => ({
+      packId: line.pack.id,
+      dishIds: line.dishes.map(d => d.id),
+      quantity: line.quantity
+    }))
+
+    this.orderService.createOrder(restaurantId, items, this.cartStore.tableIdFor(restaurantId), packs).subscribe({
       next: (order) => {
         this.cartStore.clear()
         this.router.navigate(['/orders', order.id])

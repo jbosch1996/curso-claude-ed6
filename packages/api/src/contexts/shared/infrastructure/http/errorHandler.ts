@@ -10,7 +10,8 @@ const NOT_FOUND_ERRORS = [
     'PointsRuleNotFoundError',
     'BillNotFoundError',
     'OrderNotFoundError',
-    'TableNotFoundError'
+    'TableNotFoundError',
+    'PackNotFoundError'
 ]
 
 const UNAUTHORIZED_ERRORS = [
