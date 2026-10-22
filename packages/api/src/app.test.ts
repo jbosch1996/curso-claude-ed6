@@ -2,8 +2,14 @@ import { describe, it, expect } from 'vitest'
 import request from 'supertest'
 import app from './app.js'
 
-describe('app: rutas de mesas montadas y protegidas', () => {
+describe('app: rutas de descuentos, puntos y mesas montadas y protegidas', () => {
     it.each([
+        ['get', '/api/v1/restaurants/r1/discount-codes'],
+        ['post', '/api/v1/restaurants/r1/discount-codes'],
+        ['get', '/api/v1/restaurants/r1/points-rules'],
+        ['get', '/api/v1/loyalty/r1'],
+        ['post', '/api/v1/orders/o1/bill'],
+        ['get', '/api/v1/orders/o1/bill'],
         ['get', '/api/v1/restaurants/r1/tables'],
         ['post', '/api/v1/restaurants/r1/tables'],
         ['get', '/api/v1/restaurants/r1/tables/available?guests=2'],

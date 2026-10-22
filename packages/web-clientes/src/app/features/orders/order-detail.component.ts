@@ -1,14 +1,17 @@
 import { Component, inject, OnInit, OnDestroy, signal, computed } from '@angular/core'
 import { ActivatedRoute, RouterLink } from '@angular/router'
 import { DecimalPipe, DatePipe, NgClass } from '@angular/common'
+import { FormsModule } from '@angular/forms'
 import { LucideAngularModule } from 'lucide-angular'
 import { OrderService } from '../../core/services/order.service'
+import { BillService } from '../../core/services/bill.service'
 import { Order, OrderItem } from '../../core/models/order.model'
+import { Bill, LoyaltySummary } from '../../core/models/bill.model'
 
 @Component({
   selector: 'app-order-detail',
   standalone: true,
-  imports: [RouterLink, DecimalPipe, DatePipe, NgClass, LucideAngularModule],
+  imports: [RouterLink, FormsModule, DecimalPipe, DatePipe, NgClass, LucideAngularModule],
   template: `
     <div class="container">
       @if (loading()) {
@@ -59,11 +62,72 @@ import { Order, OrderItem } from '../../core/models/order.model'
 
           <div class="ticket-divider"></div>
 
-          <div class="ticket-total">
-            <span>Total</span>
-            <strong>{{ getTotal() | number:'1.2-2' }} €</strong>
-          </div>
+          @if (bill(); as b) {
+            <div class="ticket-bill">
+              <div class="bill-row">
+                <span>Subtotal</span>
+                <span>{{ b.subtotal | number:'1.2-2' }} €</span>
+              </div>
+              @if (b.codeDiscount > 0) {
+                <div class="bill-row bill-discount">
+                  <span>Código de descuento</span>
+                  <span>-{{ b.codeDiscount | number:'1.2-2' }} €</span>
+                </div>
+              }
+              @if (b.pointsUsed > 0) {
+                <div class="bill-row bill-discount">
+                  <span>Puntos canjeados ({{ b.pointsUsed }})</span>
+                  <span>-{{ b.pointsDiscount | number:'1.2-2' }} €</span>
+                </div>
+              }
+            </div>
+            <div class="ticket-total">
+              <span>Total</span>
+              <strong>{{ b.total | number:'1.2-2' }} €</strong>
+            </div>
+            @if (b.pointsEarned > 0) {
+              <p class="points-earned">Has ganado {{ b.pointsEarned }} puntos con esta cuenta.</p>
+            }
+          } @else {
+            <div class="ticket-total">
+              <span>Total</span>
+              <strong>{{ getTotal() | number:'1.2-2' }} €</strong>
+            </div>
+          }
         </div>
+
+        @if (!bill()) {
+          <form class="card bill-panel" (ngSubmit)="requestBill()">
+            <h2>Pedir la cuenta</h2>
+
+            @if (billError()) {
+              <div class="alert-error">{{ billError() }}</div>
+            }
+
+            <div class="form-group">
+              <label for="discountCode">Código de descuento (opcional)</label>
+              <input id="discountCode" type="text" class="form-control" [(ngModel)]="discountCode" name="discountCode" maxlength="30" placeholder="VERANO10" autocomplete="off" />
+            </div>
+
+            @if (loyalty() && loyalty()!.rules.length > 0) {
+              <div class="form-group">
+                <label for="pointsRule">Canjear puntos (tu saldo: {{ loyalty()!.balance }} puntos)</label>
+                <select id="pointsRule" class="form-control" [(ngModel)]="pointsRuleId" name="pointsRuleId">
+                  <option value="">No canjear puntos</option>
+                  @for (r of loyalty()!.rules; track r.id) {
+                    <option [value]="r.id" [disabled]="r.points > loyalty()!.balance">
+                      {{ r.points }} puntos = {{ r.discount | number:'1.2-2' }} € de descuento
+                    </option>
+                  }
+                </select>
+              </div>
+            }
+
+            <button type="submit" class="btn btn-primary" [disabled]="requestingBill()">
+              {{ requestingBill() ? 'Pidiendo la cuenta...' : 'Pedir la cuenta' }}
+            </button>
+          </form>
+        }
       }
     </div>
   `,
@@ -171,16 +235,57 @@ import { Order, OrderItem } from '../../core/models/order.model'
       font-size: 18px;
       font-weight: 700;
     }
+    .ticket-bill {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 14px;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    .bill-row {
+      display: flex;
+      justify-content: space-between;
+    }
+    .bill-discount {
+      color: var(--green-light);
+    }
+    .points-earned {
+      margin-top: 14px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+    .bill-panel {
+      margin-top: 20px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .bill-panel h2 {
+      font-size: 16px;
+    }
   `]
 })
 export class OrderDetailComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute)
   private readonly orderService = inject(OrderService)
+  private readonly billService = inject(BillService)
+  private billLoaded = false
   private pollInterval: ReturnType<typeof setInterval> | null = null
 
   readonly order = signal<Order | null>(null)
   readonly loading = signal(true)
   readonly error = signal<string | null>(null)
+
+  readonly bill = signal<Bill | null>(null)
+  readonly loyalty = signal<LoyaltySummary | null>(null)
+  readonly requestingBill = signal(false)
+  readonly billError = signal<string | null>(null)
+  discountCode = ''
+  pointsRuleId = ''
 
   ngOnInit(): void {
     const orderId = this.route.snapshot.paramMap.get('id')!
@@ -200,12 +305,67 @@ export class OrderDetailComponent implements OnInit, OnDestroy {
       next: (order) => {
         this.order.set(order)
         this.loading.set(false)
+        if (!this.billLoaded) {
+          this.billLoaded = true
+          this.loadBill(order)
+        }
       },
       error: () => {
         this.error.set('Error al cargar el pedido')
         this.loading.set(false)
       }
     })
+  }
+
+  private loadBill(order: Order): void {
+    this.billService.getBill(order.id).subscribe({
+      next: (bill) => this.bill.set(bill),
+      error: (err) => {
+        // 404: aún no se ha pedido la cuenta; se ofrece el panel con el saldo de puntos.
+        if (err?.status === 404) {
+          this.billService.getLoyalty(order.restaurantId).subscribe({
+            next: (summary) => this.loyalty.set(summary),
+            error: () => this.loyalty.set(null)
+          })
+        }
+      }
+    })
+  }
+
+  requestBill(): void {
+    const order = this.order()
+    if (!order || this.requestingBill()) return
+
+    const dto: { discountCode?: string; pointsRuleId?: string } = {}
+    if (this.discountCode.trim()) dto.discountCode = this.discountCode.trim()
+    if (this.pointsRuleId) dto.pointsRuleId = this.pointsRuleId
+
+    this.requestingBill.set(true)
+    this.billError.set(null)
+    this.billService.requestBill(order.id, dto).subscribe({
+      next: (bill) => {
+        this.bill.set(bill)
+        this.requestingBill.set(false)
+      },
+      error: (err) => {
+        this.billError.set(this.getBillErrorMessage(err?.error?.error))
+        this.requestingBill.set(false)
+        if (err?.error?.error === 'BillAlreadyRequestedError') {
+          this.billService.getBill(order.id).subscribe({ next: (bill) => this.bill.set(bill) })
+        }
+      }
+    })
+  }
+
+  private getBillErrorMessage(errorName: string | undefined): string {
+    const messages: Record<string, string> = {
+      InvalidDiscountCodeError: 'El código de descuento no es válido o ha caducado.',
+      InsufficientPointsError: 'No tienes puntos suficientes para ese canje.',
+      PointsRuleNotFoundError: 'Ese canje de puntos ya no está disponible.',
+      InvalidBillError: 'El descuento por puntos supera el importe que queda por pagar.',
+      BillAlreadyRequestedError: 'La cuenta de este pedido ya se había pedido.'
+    }
+    return (errorName && messages[errorName]) || 'No se pudo pedir la cuenta. Inténtalo de nuevo.'
   }
 
   getTotal(): number {

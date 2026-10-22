@@ -1,0 +1,60 @@
+<div class="fade-in">
+  <div class="page-header">
+    <div class="header-back">
+      <a [routerLink]="listUrl" class="back-link">
+        <lucide-icon name="chevron-left" [size]="18"></lucide-icon>
+      </a>
+      <h1>{{ pageTitle }}</h1>
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="alert-error">{{ error() }}</div>
+  }
+
+  <form (ngSubmit)="onSubmit()" class="card form-card">
+    <div class="form-grid">
+      <div class="form-group form-full">
+        <label for="code">Código</label>
+        <input id="code" type="text" class="form-control" [(ngModel)]="form.code" name="code" required minlength="3" maxlength="30" placeholder="VERANO10" />
+      </div>
+
+      <div class="form-group">
+        <label for="type">Tipo de descuento</label>
+        <select id="type" class="form-control" [(ngModel)]="form.type" name="type" required>
+          <option value="percent">Porcentaje (%)</option>
+          <option value="fixed">Importe fijo (€)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="value">{{ form.type === 'percent' ? 'Porcentaje (1-100)' : 'Importe (€)' }}</label>
+        <input id="value" type="number" class="form-control" [(ngModel)]="form.value" name="value" required min="0.01" [max]="form.type === 'percent' ? 100 : null" step="0.01" />
+      </div>
+
+      <div class="form-group">
+        <label for="expires">Caducidad (opcional)</label>
+        <input id="expires" type="date" class="form-control" [(ngModel)]="expiresDate" name="expires" />
+      </div>
+
+      <div class="form-group">
+        <label for="active">Activo</label>
+        <select id="active" class="form-control" [(ngModel)]="form.active" name="active">
+          <option [ngValue]="true">Sí</option>
+          <option [ngValue]="false">No</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <a [routerLink]="listUrl" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary" [disabled]="loading()">
+        @if (loading()) {
+          Guardando...
+        } @else {
+          Guardar
+        }
+      </button>
+    </div>
+  </form>
+</div>

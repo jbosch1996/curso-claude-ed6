@@ -6,6 +6,10 @@ const NOT_FOUND_ERRORS = [
     'RestaurantNotFoundError',
     'IngredientNotFoundError',
     'DishNotFoundError',
+    'DiscountCodeNotFoundError',
+    'PointsRuleNotFoundError',
+    'BillNotFoundError',
+    'OrderNotFoundError',
     'TableNotFoundError'
 ]
 

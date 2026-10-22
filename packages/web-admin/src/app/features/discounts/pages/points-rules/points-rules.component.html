@@ -1,0 +1,78 @@
+<div class="fade-in">
+  <div class="page-header">
+    <h1>Puntos de fidelidad</h1>
+  </div>
+  <p class="subtitle">
+    Los clientes ganan 1 punto por cada euro de su cuenta y pueden canjearlos por los descuentos que definas aquí.
+  </p>
+
+  <form (ngSubmit)="onSubmit()" class="card rule-form">
+    <h3>{{ editingId() ? 'Editar equivalencia' : 'Nueva equivalencia' }}</h3>
+
+    @if (formError()) {
+      <div class="alert-error">{{ formError() }}</div>
+    }
+
+    <div class="rule-row">
+      <div class="form-group">
+        <label for="points">Puntos</label>
+        <input id="points" type="number" class="form-control" [(ngModel)]="form.points" name="points" required min="1" step="1" />
+      </div>
+      <span class="equals">=</span>
+      <div class="form-group">
+        <label for="discount">Descuento (€)</label>
+        <input id="discount" type="number" class="form-control" [(ngModel)]="form.discount" name="discount" required min="0.01" step="0.01" />
+      </div>
+      <div class="rule-actions">
+        @if (editingId()) {
+          <button type="button" class="btn btn-secondary" (click)="onCancel()">Cancelar</button>
+        }
+        <button type="submit" class="btn btn-primary" [disabled]="saving()">
+          <lucide-icon name="plus" [size]="16"></lucide-icon>
+          {{ editingId() ? 'Guardar' : 'Añadir' }}
+        </button>
+      </div>
+    </div>
+  </form>
+
+  @if (store.loading()) {
+    <div class="spinner"></div>
+  } @else if (store.error()) {
+    <div class="alert-error">{{ store.error() }}</div>
+  } @else if (store.rules().length === 0) {
+    <div class="empty-state card">
+      <lucide-icon name="star" [size]="40"></lucide-icon>
+      <p>Aún no hay equivalencias. Sin ellas, los clientes no podrán canjear puntos.</p>
+    </div>
+  } @else {
+    <div class="card table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Puntos</th>
+            <th>Descuento</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of store.rules(); track r.id) {
+            <tr>
+              <td class="points">{{ r.points }} puntos</td>
+              <td class="value">{{ formatDiscount(r.discount) }}</td>
+              <td>
+                <div class="actions">
+                  <button class="btn btn-secondary btn-sm" (click)="onEdit(r)">
+                    <lucide-icon name="edit" [size]="14"></lucide-icon>
+                  </button>
+                  <button class="btn btn-danger btn-sm" (click)="onDelete(r.id)">
+                    <lucide-icon name="trash-2" [size]="14"></lucide-icon>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
