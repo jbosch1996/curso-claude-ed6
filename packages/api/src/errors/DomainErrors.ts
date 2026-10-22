@@ -138,6 +138,12 @@ export class InvalidCategoryError extends AppError {
   }
 }
 
+export class InvalidDishIngredientError extends AppError {
+  constructor(message?: string) {
+    super(message ?? 'Invalid dish ingredient')
+  }
+}
+
 export class DishNotFoundError extends AppError {
   constructor() {
     super('Dish not found')
@@ -162,3 +168,27 @@ export class OrderNotFoundError extends AppError {
   }
 }
 
+
+export class InvalidOrderError extends AppError {
+  constructor(message?: string) {
+    super(message ?? 'Invalid order')
+  }
+}
+
+export class ForbiddenTransitionError extends AppError {
+  constructor(message?: string) {
+    super(message ?? 'Order status transition not allowed')
+  }
+}
+
+export class InvalidNumberError extends AppError {
+  constructor(message?: string) {
+    super(message ?? 'Value must be a finite number')
+  }
+}
+
+export class InvalidLogoUrlError extends AppError {
+  constructor() {
+    super('Logo URL must be a valid http or https URL')
+  }
+}

@@ -2,7 +2,16 @@
 
 - **Tipo:** bugfix (seguridad)
 - **Fecha:** 2026-10-21
-- **Estado:** Pendiente
+- **Estado:** Parcial. Implementado D1, D2, D3 y D4 (T1-T44) en la rama `feature/corregir-vulnerabilidades-owasp`. Pendiente por decisión del usuario: D5-D11 (T45-T114: autenticación, configuración, datos públicos, dependencias, frontend, refresh token y CSP).
+
+**Desviaciones de la implementación (T1-T44):**
+
+- **T1:** el `.gitignore` incluye además `.angular/`, `.DS_Store` y `.claude/worktrees/`, y se creó junto con un commit inicial, porque el repositorio no tenía commits y el worktree lo necesita.
+- **T31:** en lugar de `BEGIN/COMMIT`, los ítems se insertan en una sola sentencia y, si falla, se borra el pedido recién creado. La conexión SQLite es única y compartida, y una transacción abierta englobaría las escrituras de otras peticiones concurrentes.
+- **Mensajes de error nuevos en inglés**, igual que los errores de dominio existentes, y no en español como decía el plan (D3).
+- **T14:** comprobado antes de aplicarlo: solo `web-admin` (formulario de edición, que es solo admin) llama a `GET /restaurants/:id`; web-empleados no lo usa y web-clientes usa el endpoint público.
+- **T40:** el error de cantidad de ingrediente de un plato pasa de `Error` genérico a `InvalidDishIngredientError` (mismo mensaje), por lo que ahora lo trata el gestor de errores como `AppError`.
+- **Tests existentes modificados** porque el plan cambia expresamente ese comportamiento: `ingredient.service.test.ts` y `order.service.test.ts` (nuevas firmas con `restaurantId` y `actor`).
 
 ## 1. Contexto
 
@@ -254,62 +263,62 @@ Se mantiene `Authorization: Bearer` con el JWT de acceso. El refresh token es un
 
 ### Fase 0: Higiene del repositorio (H10)
 
-- [ ] **T1** (5 min) — Crear `.gitignore` con `node_modules`, `dist`, `.angular`, `*.db`, `.env`, `.env.*` y la excepción `!.env.example` · `.gitignore`
-- [ ] **T2** (5 min) — Crear `.env.example` con `JWT_SECRET` (comentando que en producción debe tener 32+ caracteres), `CORS_ORIGINS` y `PORT` · `packages/api/.env.example`
+- [x] **T1** (5 min) — Crear `.gitignore` con `node_modules`, `dist`, `.angular`, `*.db`, `.env`, `.env.*` y la excepción `!.env.example` · `.gitignore`
+- [x] **T2** (5 min) — Crear `.env.example` con `JWT_SECRET` (comentando que en producción debe tener 32+ caracteres), `CORS_ORIGINS` y `PORT` · `packages/api/.env.example`
 
 ### Fase 1: Secreto JWT (H1)
 
-- [ ] **T3** (10 min) — Crear `env.ts` con `JWT_SECRET` según D1: obligatorio y de 32+ caracteres en producción, fijo en test, aleatorio con aviso en desarrollo · `packages/api/src/config/env.ts`
-- [ ] **T4** (10 min) — Test de `env.ts` con `vi.resetModules()` y `vi.stubEnv`: falla en producción sin secreto, falla con secreto corto, acepta secreto válido, genera uno en desarrollo · `packages/api/src/config/env.test.ts`
-- [ ] **T5** (5 min) — Usar `JWT_SECRET` de `env.ts` y `{ algorithms: ['HS256'] }` en `jwt.verify`; quitar el literal por defecto · `packages/api/src/contexts/shared/infrastructure/http/middlewares.ts`
-- [ ] **T6** (5 min) — Usar `JWT_SECRET` de `env.ts` y `algorithm: 'HS256'` en `jwt.sign`; quitar el literal por defecto · `packages/api/src/contexts/employee/infrastructure/BcryptAuthService.ts`
-- [ ] **T7** (5 min) — Añadir `import 'dotenv/config'` como primera línea para que cargue `.env` · `packages/api/src/server.ts`
-- [ ] **T8** (10 min) — Test de `authenticate` con supertest: sin token (401), token mal firmado (401), token con `alg: none` (401), token caducado (401), token válido (200 y `req.user` rellenado) · `packages/api/src/contexts/shared/infrastructure/http/middlewares.test.ts`
+- [x] **T3** (10 min) — Crear `env.ts` con `JWT_SECRET` según D1: obligatorio y de 32+ caracteres en producción, fijo en test, aleatorio con aviso en desarrollo · `packages/api/src/config/env.ts`
+- [x] **T4** (10 min) — Test de `env.ts` con `vi.resetModules()` y `vi.stubEnv`: falla en producción sin secreto, falla con secreto corto, acepta secreto válido, genera uno en desarrollo · `packages/api/src/config/env.test.ts`
+- [x] **T5** (5 min) — Usar `JWT_SECRET` de `env.ts` y `{ algorithms: ['HS256'] }` en `jwt.verify`; quitar el literal por defecto · `packages/api/src/contexts/shared/infrastructure/http/middlewares.ts`
+- [x] **T6** (5 min) — Usar `JWT_SECRET` de `env.ts` y `algorithm: 'HS256'` en `jwt.sign`; quitar el literal por defecto · `packages/api/src/contexts/employee/infrastructure/BcryptAuthService.ts`
+- [x] **T7** (5 min) — Añadir `import 'dotenv/config'` como primera línea para que cargue `.env` · `packages/api/src/server.ts`
+- [x] **T8** (10 min) — Test de `authenticate` con supertest: sin token (401), token mal firmado (401), token con `alg: none` (401), token caducado (401), token válido (200 y `req.user` rellenado) · `packages/api/src/contexts/shared/infrastructure/http/middlewares.test.ts`
 
 ### Fase 2: Ámbito por restaurante (H3)
 
-- [ ] **T9** (5 min) — Tipar `req.user` con una interfaz `AuthUser { id, role, restaurantId }` en lugar de `any` · `packages/api/src/contexts/shared/infrastructure/http/middlewares.ts`
-- [ ] **T10** (10 min) — Añadir el middleware `requireRestaurantAccess(param)` según D2 · `packages/api/src/contexts/shared/infrastructure/http/middlewares.ts`
-- [ ] **T11** (10 min) — Tests de `requireRestaurantAccess`: admin pasa, manager de su restaurante pasa, manager de otro restaurante 403, usuario sin `restaurantId` 403, parámetro personalizado `id` · `packages/api/src/contexts/shared/infrastructure/http/middlewares.test.ts`
-- [ ] **T12** (5 min) — Aplicar `requireRestaurantAccess()` a las cinco rutas de platos · `packages/api/src/routes/dish.routes.ts`
-- [ ] **T13** (5 min) — Aplicar `requireRestaurantAccess()` a las cinco rutas de ingredientes · `packages/api/src/routes/ingredient.routes.ts`
-- [ ] **T14** (5 min) — Aplicar `requireRestaurantAccess('id')` a `GET /restaurants/:id` · `packages/api/src/routes/restaurant.routes.ts`
-- [ ] **T15** (10 min) — `DishService.findById`, `update` y `delete` reciben `restaurantId` y lanzan `DishNotFoundError` si el plato es de otro restaurante · `packages/api/src/services/dish.service.ts`
-- [ ] **T16** (5 min) — Pasar `req.params.restaurantId` a `findById`, `update` y `delete` en el controlador de platos · `packages/api/src/controllers/dish.controller.ts`
-- [ ] **T17** (10 min) — Mismo cambio de ámbito en `IngredientService` (`findById`, `update`, `delete`) y en su controlador · `packages/api/src/services/ingredient.service.ts`, `packages/api/src/controllers/ingredient.controller.ts`
-- [ ] **T18** (5 min) — Crear `InvalidDishIngredientError` (400) · `packages/api/src/errors/DomainErrors.ts`
-- [ ] **T19** (5 min) — Crear `MockDishRepository` (en memoria) para tests · `packages/api/src/repositories/mocks/MockDishRepository.ts`
-- [ ] **T20** (10 min) — `DishService` recibe `IngredientRepository` y valida que cada `ingredientId` exista y sea del restaurante, en `create` y `update` · `packages/api/src/services/dish.service.ts`
-- [ ] **T21** (5 min) — Inyectar `SqliteIngredientRepository` al construir `DishService` · `packages/api/src/routes/dish.routes.ts`
-- [ ] **T22** (10 min) — Tests de `DishService`: plato de otro restaurante en `update` y `delete` da 404, ingrediente de otro restaurante en `create` da 400, ingrediente inexistente da 400, caso feliz · `packages/api/src/services/dish.service.test.ts`
-- [ ] **T23** (10 min) — Ampliar tests de `IngredientService` con el caso de ingrediente de otro restaurante (404) y ajustar los existentes a las nuevas firmas · `packages/api/src/services/ingredient.service.test.ts`
+- [x] **T9** (5 min) — Tipar `req.user` con una interfaz `AuthUser { id, role, restaurantId }` en lugar de `any` · `packages/api/src/contexts/shared/infrastructure/http/middlewares.ts`
+- [x] **T10** (10 min) — Añadir el middleware `requireRestaurantAccess(param)` según D2 · `packages/api/src/contexts/shared/infrastructure/http/middlewares.ts`
+- [x] **T11** (10 min) — Tests de `requireRestaurantAccess`: admin pasa, manager de su restaurante pasa, manager de otro restaurante 403, usuario sin `restaurantId` 403, parámetro personalizado `id` · `packages/api/src/contexts/shared/infrastructure/http/middlewares.test.ts`
+- [x] **T12** (5 min) — Aplicar `requireRestaurantAccess()` a las cinco rutas de platos · `packages/api/src/routes/dish.routes.ts`
+- [x] **T13** (5 min) — Aplicar `requireRestaurantAccess()` a las cinco rutas de ingredientes · `packages/api/src/routes/ingredient.routes.ts`
+- [x] **T14** (5 min) — Aplicar `requireRestaurantAccess('id')` a `GET /restaurants/:id` · `packages/api/src/routes/restaurant.routes.ts`
+- [x] **T15** (10 min) — `DishService.findById`, `update` y `delete` reciben `restaurantId` y lanzan `DishNotFoundError` si el plato es de otro restaurante · `packages/api/src/services/dish.service.ts`
+- [x] **T16** (5 min) — Pasar `req.params.restaurantId` a `findById`, `update` y `delete` en el controlador de platos · `packages/api/src/controllers/dish.controller.ts`
+- [x] **T17** (10 min) — Mismo cambio de ámbito en `IngredientService` (`findById`, `update`, `delete`) y en su controlador · `packages/api/src/services/ingredient.service.ts`, `packages/api/src/controllers/ingredient.controller.ts`
+- [x] **T18** (5 min) — Crear `InvalidDishIngredientError` (400) · `packages/api/src/errors/DomainErrors.ts`
+- [x] **T19** (5 min) — Crear `MockDishRepository` (en memoria) para tests · `packages/api/src/repositories/mocks/MockDishRepository.ts`
+- [x] **T20** (10 min) — `DishService` recibe `IngredientRepository` y valida que cada `ingredientId` exista y sea del restaurante, en `create` y `update` · `packages/api/src/services/dish.service.ts`
+- [x] **T21** (5 min) — Inyectar `SqliteIngredientRepository` al construir `DishService` · `packages/api/src/routes/dish.routes.ts`
+- [x] **T22** (10 min) — Tests de `DishService`: plato de otro restaurante en `update` y `delete` da 404, ingrediente de otro restaurante en `create` da 400, ingrediente inexistente da 400, caso feliz · `packages/api/src/services/dish.service.test.ts`
+- [x] **T23** (10 min) — Ampliar tests de `IngredientService` con el caso de ingrediente de otro restaurante (404) y ajustar los existentes a las nuevas firmas · `packages/api/src/services/ingredient.service.test.ts`
 
 ### Fase 3: Pedidos (H2, H4, H13)
 
-- [ ] **T24** (5 min) — Crear `ForbiddenTransitionError` (403), `InvalidOrderError` (400) y `OrderForbiddenError` si hace falta · `packages/api/src/errors/DomainErrors.ts`
-- [ ] **T25** (10 min) — Añadir al modelo la tabla de transiciones por rol y la función `assertTransitionAllowed(role, item, nextStatus)` según D3 · `packages/api/src/models/order.model.ts`
-- [ ] **T26** (10 min) — Tests de `assertTransitionAllowed`: cocinero (`preparando`, `listo`, también sobre bebida, bloqueado en `entregado`), camarero (bebida `listo`, `entregado`, bloqueado `preparando`), manager y admin, retroceso rechazado · `packages/api/src/models/order.model.test.ts`
-- [ ] **T27** (10 min) — `OrderService.create` valida entrada según D3 (array, tamaño, `quantity` entera 1-20, total ≤ 100, `notes`, `tableId`) · `packages/api/src/services/order.service.ts`
-- [ ] **T28** (10 min) — `OrderService` recibe `DishRepository` y comprueba que cada `dishId` exista, sea del restaurante del pedido y esté disponible · `packages/api/src/services/order.service.ts`
-- [ ] **T29** (10 min) — `OrderService.updateItemStatus` recibe `actor { role, restaurantId }`; verifica pertenencia y transición · `packages/api/src/services/order.service.ts`
-- [ ] **T30** (5 min) — `OrderService.getById` recibe `actor` y solo devuelve el pedido al propietario, al personal del restaurante o al admin (si no, `OrderNotFoundError`) · `packages/api/src/services/order.service.ts`
-- [ ] **T31** (10 min) — Insertar pedido e ítems dentro de una transacción (`BEGIN`/`COMMIT`/`ROLLBACK`) · `packages/api/src/repositories/order.repository.ts`
-- [ ] **T32** (10 min) — Ajustar los tests existentes de `updateItemStatus` a la nueva firma y añadir casos: pedido de otro restaurante (404), cocinero entregando (rechazado), camarero marcando `preparando` (rechazado) · `packages/api/src/services/order.service.test.ts`
-- [ ] **T33** (10 min) — Tests de `OrderService.create`: `quantity` 0, negativa, decimal, `NaN`, string y 1e9 rechazadas, `items` vacío o no array, plato de otro restaurante, plato no disponible, caso feliz · `packages/api/src/services/order.service.test.ts`
-- [ ] **T34** (5 min) — Tests de `getById` por rol y propietario (cliente ajeno, empleado de otro restaurante, admin) · `packages/api/src/services/order.service.test.ts`
-- [ ] **T35** (10 min) — Controlador de pedidos: `getActiveOrders` usa `user.restaurantId` salvo admin; `getById` y `updateItemStatus` pasan el `actor`; sin `error.message` para errores que no son `AppError`; `OrderNotFoundError` a 404 · `packages/api/src/controllers/order.controller.ts`
-- [ ] **T36** (5 min) — `authorize(['admin','manager','camarero','cocinero'])` en `/active` y en `PATCH …/status`, e inyectar `DishRepository` en `OrderService` · `packages/api/src/routes/order.routes.ts`
-- [ ] **T37** (10 min) — Test de integración con supertest de `/orders` con repositorios mock: cliente recibe 403 en `/active` y en `PATCH`; empleado de otro restaurante no ve pedidos ajenos; JSON con `quantity` enorme da 400 · `packages/api/src/routes/order.routes.test.ts`
+- [x] **T24** (5 min) — Crear `ForbiddenTransitionError` (403), `InvalidOrderError` (400) y `OrderForbiddenError` si hace falta · `packages/api/src/errors/DomainErrors.ts`
+- [x] **T25** (10 min) — Añadir al modelo la tabla de transiciones por rol y la función `assertTransitionAllowed(role, item, nextStatus)` según D3 · `packages/api/src/models/order.model.ts`
+- [x] **T26** (10 min) — Tests de `assertTransitionAllowed`: cocinero (`preparando`, `listo`, también sobre bebida, bloqueado en `entregado`), camarero (bebida `listo`, `entregado`, bloqueado `preparando`), manager y admin, retroceso rechazado · `packages/api/src/models/order.model.test.ts`
+- [x] **T27** (10 min) — `OrderService.create` valida entrada según D3 (array, tamaño, `quantity` entera 1-20, total ≤ 100, `notes`, `tableId`) · `packages/api/src/services/order.service.ts`
+- [x] **T28** (10 min) — `OrderService` recibe `DishRepository` y comprueba que cada `dishId` exista, sea del restaurante del pedido y esté disponible · `packages/api/src/services/order.service.ts`
+- [x] **T29** (10 min) — `OrderService.updateItemStatus` recibe `actor { role, restaurantId }`; verifica pertenencia y transición · `packages/api/src/services/order.service.ts`
+- [x] **T30** (5 min) — `OrderService.getById` recibe `actor` y solo devuelve el pedido al propietario, al personal del restaurante o al admin (si no, `OrderNotFoundError`) · `packages/api/src/services/order.service.ts`
+- [x] **T31** (10 min) — Insertar pedido e ítems dentro de una transacción (`BEGIN`/`COMMIT`/`ROLLBACK`) · `packages/api/src/repositories/order.repository.ts`
+- [x] **T32** (10 min) — Ajustar los tests existentes de `updateItemStatus` a la nueva firma y añadir casos: pedido de otro restaurante (404), cocinero entregando (rechazado), camarero marcando `preparando` (rechazado) · `packages/api/src/services/order.service.test.ts`
+- [x] **T33** (10 min) — Tests de `OrderService.create`: `quantity` 0, negativa, decimal, `NaN`, string y 1e9 rechazadas, `items` vacío o no array, plato de otro restaurante, plato no disponible, caso feliz · `packages/api/src/services/order.service.test.ts`
+- [x] **T34** (5 min) — Tests de `getById` por rol y propietario (cliente ajeno, empleado de otro restaurante, admin) · `packages/api/src/services/order.service.test.ts`
+- [x] **T35** (10 min) — Controlador de pedidos: `getActiveOrders` usa `user.restaurantId` salvo admin; `getById` y `updateItemStatus` pasan el `actor`; sin `error.message` para errores que no son `AppError`; `OrderNotFoundError` a 404 · `packages/api/src/controllers/order.controller.ts`
+- [x] **T36** (5 min) — `authorize(['admin','manager','camarero','cocinero'])` en `/active` y en `PATCH …/status`, e inyectar `DishRepository` en `OrderService` · `packages/api/src/routes/order.routes.ts`
+- [x] **T37** (10 min) — Test de integración con supertest de `/orders` con repositorios mock: cliente recibe 403 en `/active` y en `PATCH`; empleado de otro restaurante no ve pedidos ajenos; JSON con `quantity` enorme da 400 · `packages/api/src/routes/order.routes.test.ts`
 
 ### Fase 4: Validación de entrada (H8)
 
-- [ ] **T38** (10 min) — Crear helpers de validación `assertPositiveNumber`, `assertNonNegativeNumber` y `assertHttpUrl` · `packages/api/src/models/validation.ts`
-- [ ] **T39** (5 min) — Tests de los helpers: `NaN`, `Infinity`, string numérico, negativo, cero, `javascript:`, `data:`, `null`, `https:` válido · `packages/api/src/models/validation.test.ts`
-- [ ] **T40** (10 min) — Usar los helpers en precio de plato y cantidad de ingrediente de plato · `packages/api/src/services/dish.service.ts`, `packages/api/src/models/dish.model.ts`
-- [ ] **T41** (5 min) — Usar `assertNonNegativeNumber` en `currentStock` · `packages/api/src/services/ingredient.service.ts`
-- [ ] **T42** (5 min) — Validar `logoUrl` con `assertHttpUrl` en alta y edición de restaurante · `packages/api/src/services/restaurant.service.ts`
-- [ ] **T43** (5 min) — En `DishController.update`, si `available` no llega, conservar el valor existente · `packages/api/src/controllers/dish.controller.ts`, `packages/api/src/services/dish.service.ts`
-- [ ] **T44** (10 min) — Tests de servicio: precio `"abc"`, `NaN` y negativo; stock string; `logoUrl` con `javascript:` rechazados; `available` ausente conserva el valor · `packages/api/src/services/dish.service.test.ts`, `ingredient.service.test.ts`, `restaurant.service.test.ts`
+- [x] **T38** (10 min) — Crear helpers de validación `assertPositiveNumber`, `assertNonNegativeNumber` y `assertHttpUrl` · `packages/api/src/models/validation.ts`
+- [x] **T39** (5 min) — Tests de los helpers: `NaN`, `Infinity`, string numérico, negativo, cero, `javascript:`, `data:`, `null`, `https:` válido · `packages/api/src/models/validation.test.ts`
+- [x] **T40** (10 min) — Usar los helpers en precio de plato y cantidad de ingrediente de plato · `packages/api/src/services/dish.service.ts`, `packages/api/src/models/dish.model.ts`
+- [x] **T41** (5 min) — Usar `assertNonNegativeNumber` en `currentStock` · `packages/api/src/services/ingredient.service.ts`
+- [x] **T42** (5 min) — Validar `logoUrl` con `assertHttpUrl` en alta y edición de restaurante · `packages/api/src/services/restaurant.service.ts`
+- [x] **T43** (5 min) — En `DishController.update`, si `available` no llega, conservar el valor existente · `packages/api/src/controllers/dish.controller.ts`, `packages/api/src/services/dish.service.ts`
+- [x] **T44** (10 min) — Tests de servicio: precio `"abc"`, `NaN` y negativo; stock string; `logoUrl` con `javascript:` rechazados; `available` ausente conserva el valor · `packages/api/src/services/dish.service.test.ts`, `ingredient.service.test.ts`, `restaurant.service.test.ts`
 
 ### Fase 5: Autenticación (H5, H6, H12)
 

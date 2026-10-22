@@ -1,4 +1,4 @@
-import { InvalidOrderStatusError } from '@errors/DomainErrors.js'
+import { InvalidOrderStatusError, ForbiddenTransitionError } from '@errors/DomainErrors.js'
 
 const VALID_ORDER_STATUSES = ['pendiente', 'preparando', 'listo', 'entregado'] as const
 
@@ -36,4 +36,27 @@ export function normalizeOrderStatus(value: string): OrderStatusType {
 
 export function isOrderFullyDelivered(order: Order): boolean {
     return order.items.length > 0 && order.items.every(item => item.status === 'entregado')
+}
+
+const STATUS_ORDER: readonly OrderStatusType[] = VALID_ORDER_STATUSES
+
+export function assertTransitionAllowed(role: string, item: OrderItem, next: OrderStatusType): void {
+    const current = item.status
+    const isDrink = item.dishCategory?.toLowerCase() === 'bebida'
+    const isForward = STATUS_ORDER.indexOf(next) > STATUS_ORDER.indexOf(current)
+
+    let allowed = false
+    if (role === 'manager' || role === 'admin') {
+        allowed = isForward
+    } else if (role === 'cocinero') {
+        allowed = (current === 'pendiente' && next === 'preparando')
+            || (current === 'preparando' && next === 'listo')
+    } else if (role === 'camarero') {
+        allowed = (current === 'pendiente' && next === 'listo' && isDrink)
+            || (current === 'listo' && next === 'entregado')
+    }
+
+    if (!allowed) {
+        throw new ForbiddenTransitionError(`Role ${role} cannot move an item from ${current} to ${next}`)
+    }
 }

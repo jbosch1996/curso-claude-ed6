@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
 import type { Restaurant } from '@models/restaurant.model.js'
+import { assertHttpUrl } from '@models/validation.js'
 import type { RestaurantRepository } from '@repositories/restaurant.repository.js'
 import { Email } from '@shared/domain/value-objects/Email.js'
 import {
@@ -114,6 +115,8 @@ export class RestaurantService {
         if (!props.ownerLastName || props.ownerLastName.trim() === '') {
             throw new OwnerLastNameRequiredError()
         }
+
+        assertHttpUrl(props.logoUrl)
 
         const email = new Email(props.email).getValue()
         if (!PHONE_REGEX.test(props.phone)) {
