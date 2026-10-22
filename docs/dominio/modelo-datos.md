@@ -15,6 +15,10 @@ erDiagram
     dishes ||--o{ dish_ingredients : "contiene"
     ingredients ||--o{ dish_ingredients : "usado en"
     orders ||--o{ order_items : "contiene"
+    restaurants ||--o{ discount_codes : "ofrece"
+    restaurants ||--o{ points_rules : "define"
+    restaurants ||--o{ client_points : "acumula"
+    orders ||--o| bills : "tiene"
     dishes ||--o{ order_items : "pedido como"
 
     restaurants {
@@ -83,6 +87,47 @@ erDiagram
         INTEGER quantity
         TEXT notes
         TEXT status
+    }
+
+    discount_codes {
+        TEXT id PK
+        TEXT restaurant_id FK
+        TEXT code
+        TEXT type
+        REAL value
+        TEXT expires_at
+        INTEGER active
+        TEXT created_at
+        TEXT updated_at
+    }
+
+    points_rules {
+        TEXT id PK
+        TEXT restaurant_id FK
+        INTEGER points
+        REAL discount
+        TEXT created_at
+    }
+
+    client_points {
+        TEXT client_id PK
+        TEXT restaurant_id PK_FK
+        INTEGER balance
+    }
+
+    bills {
+        TEXT id PK
+        TEXT order_id FK
+        TEXT restaurant_id FK
+        TEXT client_id
+        REAL subtotal
+        TEXT discount_code_id
+        REAL code_discount
+        INTEGER points_used
+        REAL points_discount
+        REAL total
+        INTEGER points_earned
+        TEXT created_at
     }
 ```
 
@@ -215,6 +260,78 @@ Líneas de pedido. Cada ítem es un plato con cantidad y estado.
 
 ---
 
+### `discount_codes`
+
+Códigos de descuento de un restaurante, que los clientes aplican al pedir la cuenta.
+
+| Columna | Tipo | Nullable | Descripción |
+| --- | --- | --- | --- |
+| `id` | TEXT | No | UUID, clave primaria |
+| `restaurant_id` | TEXT | No | FK → `restaurants.id` |
+| `code` | TEXT | No | Código en mayúsculas (3-30 caracteres: letras, dígitos, `-`, `_`) |
+| `type` | TEXT | No | `percent` (porcentaje) o `fixed` (importe en euros) |
+| `value` | REAL | No | Porcentaje (0-100] o importe en euros |
+| `expires_at` | TEXT | Sí | Caducidad (ISO 8601); `NULL` = no caduca |
+| `active` | INTEGER | No | 1 = activo, 0 = inactivo |
+| `created_at` / `updated_at` | TEXT | No | Fechas |
+
+**Restricciones:** `UNIQUE(restaurant_id, code)`.
+
+---
+
+### `points_rules`
+
+Equivalencias puntos → euros que define el administrador (p. ej. 10 puntos = 1 €, 100 puntos = 10 €). Cada fila es un escalón canjeable.
+
+| Columna | Tipo | Nullable | Descripción |
+| --- | --- | --- | --- |
+| `id` | TEXT | No | UUID, clave primaria |
+| `restaurant_id` | TEXT | No | FK → `restaurants.id` |
+| `points` | INTEGER | No | Puntos que se gastan |
+| `discount` | REAL | No | Euros de descuento |
+| `created_at` | TEXT | No | Fecha de creación |
+
+**Restricciones:** `UNIQUE(restaurant_id, points)`.
+
+---
+
+### `client_points`
+
+Saldo de puntos de un cliente en un restaurante.
+
+| Columna | Tipo | Nullable | Descripción |
+| --- | --- | --- | --- |
+| `client_id` | TEXT | No | ID del cliente (`employees.id`, sin FK, como `orders.client_id`) |
+| `restaurant_id` | TEXT | No | FK → `restaurants.id` |
+| `balance` | INTEGER | No | Saldo; `CHECK(balance >= 0)` |
+
+**Restricciones:** clave primaria `(client_id, restaurant_id)`.
+
+---
+
+### `bills`
+
+Cuenta pedida por el cliente para un pedido, con el desglose de descuentos.
+
+| Columna | Tipo | Nullable | Descripción |
+| --- | --- | --- | --- |
+| `id` | TEXT | No | UUID, clave primaria |
+| `order_id` | TEXT | No | FK → `orders.id`, único |
+| `restaurant_id` | TEXT | No | FK → `restaurants.id` |
+| `client_id` | TEXT | No | Cliente que pidió la cuenta |
+| `subtotal` | REAL | No | Suma de los precios de los ítems |
+| `discount_code_id` | TEXT | Sí | Código aplicado (sin FK: la cuenta sobrevive al borrado del código) |
+| `code_discount` | REAL | No | Euros descontados por el código |
+| `points_used` | INTEGER | No | Puntos canjeados |
+| `points_discount` | REAL | No | Euros descontados por los puntos |
+| `total` | REAL | No | Importe final (nunca negativo) |
+| `points_earned` | INTEGER | No | Puntos ganados (`floor(total)`) |
+| `created_at` | TEXT | No | Fecha |
+
+**Restricciones:** `UNIQUE(order_id)` (una cuenta por pedido) y ON DELETE CASCADE desde `orders.id`.
+
+---
+
 ## Relaciones
 
 | Relación | Tipo | Descripción |
@@ -226,6 +343,10 @@ Líneas de pedido. Cada ítem es un plato con cantidad y estado.
 | Dish ↔ Ingredient | N:M | Un plato usa varios ingredientes (via `dish_ingredients`) |
 | Order → OrderItems | 1:N | Un pedido tiene varios ítems |
 | Dish → OrderItems | 1:N | Un plato puede estar en varios ítems de pedido |
+| Restaurant → DiscountCodes | 1:N | Un restaurante tiene muchos códigos de descuento |
+| Restaurant → PointsRules | 1:N | Un restaurante define varias equivalencias de puntos |
+| Restaurant + cliente → ClientPoints | 1:1 | Un saldo por cliente y restaurante |
+| Order → Bill | 1:0..1 | Un pedido tiene como mucho una cuenta |
 
 ---
 

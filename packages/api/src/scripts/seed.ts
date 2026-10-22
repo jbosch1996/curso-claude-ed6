@@ -201,6 +201,22 @@ const seed = async () => {
 
         console.log('Sample orders created')
 
+        for (const restaurantId of ['rest-1', 'rest-2']) {
+            const now = new Date().toISOString()
+            await dbConfig.run(`
+                INSERT OR IGNORE INTO discount_codes (id, restaurant_id, code, type, value, expires_at, active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [`${restaurantId}-bienvenida10`, restaurantId, 'BIENVENIDA10', 'percent', 10, null, 1, now, now])
+            for (const [points, discount] of [[10, 1], [100, 10]]) {
+                await dbConfig.run(`
+                    INSERT OR IGNORE INTO points_rules (id, restaurant_id, points, discount, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                `, [`${restaurantId}-puntos-${points}`, restaurantId, points, discount, now])
+            }
+        }
+
+        console.log('Sample discount code (BIENVENIDA10) and points rules (10 = 1€, 100 = 10€) created')
+
         console.log('\n=== Seed completado ===')
         console.log('\nEmpleados:')
         console.log('  Admin: admin@resttek.com / admin@resttek.com')

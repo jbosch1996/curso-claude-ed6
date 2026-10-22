@@ -1,0 +1,67 @@
+<div class="fade-in">
+  <div class="page-header">
+    <h1>Códigos de descuento</h1>
+    <a [routerLink]="['new']" class="btn btn-primary">
+      <lucide-icon name="plus" [size]="16"></lucide-icon>
+      Nuevo código
+    </a>
+  </div>
+
+  @if (store.loading()) {
+    <div class="spinner"></div>
+  } @else if (store.error()) {
+    <div class="alert-error">{{ store.error() }}</div>
+  } @else if (store.codes().length === 0) {
+    <div class="empty-state card">
+      <lucide-icon name="ticket" [size]="40"></lucide-icon>
+      <p>No hay códigos de descuento para este restaurante</p>
+    </div>
+  } @else {
+    <div class="card table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Descuento</th>
+            <th>Caduca</th>
+            <th>Activo</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of store.codes(); track c.id) {
+            <tr>
+              <td class="code">{{ c.code }}</td>
+              <td class="value">{{ formatValue(c) }}</td>
+              <td>
+                @if (c.expiresAt) {
+                  {{ c.expiresAt | date:'dd/MM/yyyy' }}
+                  @if (isExpired(c)) {
+                    <span class="badge badge-muted">Caducado</span>
+                  }
+                } @else {
+                  <span class="muted">Sin caducidad</span>
+                }
+              </td>
+              <td>
+                <button class="toggle-btn" [class.active]="c.active" (click)="onToggleActive(c)">
+                  <span class="toggle-dot"></span>
+                </button>
+              </td>
+              <td>
+                <div class="actions">
+                  <a [routerLink]="[c.id, 'edit']" class="btn btn-secondary btn-sm">
+                    <lucide-icon name="edit" [size]="14"></lucide-icon>
+                  </a>
+                  <button class="btn btn-danger btn-sm" (click)="onDelete(c.id)">
+                    <lucide-icon name="trash-2" [size]="14"></lucide-icon>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

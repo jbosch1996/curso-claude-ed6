@@ -163,6 +163,55 @@ export class Database {
                 status TEXT NOT NULL,
                 FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE,
                 FOREIGN KEY(dish_id) REFERENCES dishes(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS discount_codes (
+                id TEXT PRIMARY KEY,
+                restaurant_id TEXT NOT NULL,
+                code TEXT NOT NULL,
+                type TEXT NOT NULL,
+                value REAL NOT NULL,
+                expires_at TEXT,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(restaurant_id, code),
+                FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS points_rules (
+                id TEXT PRIMARY KEY,
+                restaurant_id TEXT NOT NULL,
+                points INTEGER NOT NULL,
+                discount REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(restaurant_id, points),
+                FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS client_points (
+                client_id TEXT NOT NULL,
+                restaurant_id TEXT NOT NULL,
+                balance INTEGER NOT NULL DEFAULT 0 CHECK(balance >= 0),
+                PRIMARY KEY(client_id, restaurant_id),
+                FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS bills (
+                id TEXT PRIMARY KEY,
+                order_id TEXT NOT NULL UNIQUE,
+                restaurant_id TEXT NOT NULL,
+                client_id TEXT NOT NULL,
+                subtotal REAL NOT NULL,
+                discount_code_id TEXT,
+                code_discount REAL NOT NULL DEFAULT 0,
+                points_used INTEGER NOT NULL DEFAULT 0,
+                points_discount REAL NOT NULL DEFAULT 0,
+                total REAL NOT NULL,
+                points_earned INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE,
+                FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
             )
         `.split(';')
 

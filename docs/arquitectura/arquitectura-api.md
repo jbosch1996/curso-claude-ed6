@@ -51,7 +51,7 @@ contexts/employee/
 
 `contexts/shared/` no es un bounded context de negocio: contiene el value object `Email` y los middlewares y el `errorHandler` de Express.
 
-### 2. Por capas → `restaurant`, `dish`, `ingredient`, `order`
+### 2. Por capas → `restaurant`, `dish`, `ingredient`, `order` y descuentos/puntos (`discount-code`, `points-rule`, `bill`, `loyalty`)
 
 El resto de dominios **no** usan bounded contexts. Se organizan en carpetas transversales por tipo de fichero:
 
@@ -326,6 +326,33 @@ Ninguna ruta de pedidos aplica `authorize()`: cualquier usuario autenticado pued
 
 Al crear un pedido, el servicio **expande las cantidades**: un ítem con `quantity: 3` se guarda como 3 filas de `order_items` con `quantity: 1` cada una, para poder seguir el estado de cada unidad por separado.
 
+### Códigos de descuento, puntos y cuenta
+
+Por capas: `models/{discount-code,points-rule,bill}.model.ts`, repositorios (`discount-code`, `points-rule`, `client-points`, `bill`, con mocks en `repositories/mocks/`), servicios (`DiscountCodeService`, `PointsRuleService`, `BillService`, `LoyaltyService`), controladores y routers con factory (`createDiscountCodeRouter(service)`, etc.) para poder probarlos con mocks.
+
+| Método | Ruta | Roles |
+| --- | --- | --- |
+| `POST` | `/api/v1/restaurants/:restaurantId/discount-codes` | admin, manager (+ `requireRestaurantAccess`) — 201 |
+| `GET` | `/api/v1/restaurants/:restaurantId/discount-codes` | admin, manager (+ `requireRestaurantAccess`) |
+| `GET` | `/api/v1/restaurants/:restaurantId/discount-codes/:id` | admin, manager (+ `requireRestaurantAccess`) — 404 si es de otro restaurante |
+| `PUT` | `/api/v1/restaurants/:restaurantId/discount-codes/:id` | admin, manager (+ `requireRestaurantAccess`) |
+| `DELETE` | `/api/v1/restaurants/:restaurantId/discount-codes/:id` | admin, manager (+ `requireRestaurantAccess`) — 204 |
+| `POST` | `/api/v1/restaurants/:restaurantId/points-rules` | admin, manager (+ `requireRestaurantAccess`) — 201 |
+| `GET` | `/api/v1/restaurants/:restaurantId/points-rules` | admin, manager (+ `requireRestaurantAccess`) — ordenadas por puntos |
+| `PUT` | `/api/v1/restaurants/:restaurantId/points-rules/:id` | admin, manager (+ `requireRestaurantAccess`) |
+| `DELETE` | `/api/v1/restaurants/:restaurantId/points-rules/:id` | admin, manager (+ `requireRestaurantAccess`) — 204 |
+| `GET` | `/api/v1/loyalty/:restaurantId` | autenticado — `{ balance, rules }` del usuario del JWT |
+| `POST` | `/api/v1/orders/:orderId/bill` | autenticado, solo el propietario del pedido — body `{ discountCode?, pointsRuleId? }`, 201 |
+| `GET` | `/api/v1/orders/:orderId/bill` | autenticado — propietario o personal del restaurante (admin, manager, camarero, cocinero) |
+
+Reglas de `BillService.create`:
+
+- Una sola cuenta por pedido (`BillAlreadyRequestedError`, 400); un pedido ajeno o inexistente es `OrderNotFoundError` (404).
+- El **código** se normaliza (mayúsculas, sin espacios) y debe existir en el restaurante del pedido, estar activo y no caducado. Cualquier fallo devuelve el mismo mensaje `Invalid or expired discount code`, sin distinguir la causa.
+- El **canje de puntos** usa una equivalencia (`points_rules`) del restaurante: exige saldo suficiente (`InsufficientPointsError`) y que su descuento no supere lo que queda tras el código (`InvalidBillError`). Código y puntos se pueden combinar.
+- **Puntos ganados:** `floor(total)` (1 por euro pagado), por restaurante.
+- **Sin transacciones** (la conexión SQLite es compartida): se inserta la cuenta (`UNIQUE(order_id)`), se descuentan los puntos con un `UPDATE … WHERE balance >= ?` atómico (si falla, se borra la cuenta) y se suman los puntos ganados.
+
 ---
 
 ## Middlewares
@@ -345,14 +372,14 @@ Ambos responden directamente, sin pasar por el `errorHandler`.
 
 Jerarquía: `Error` → `AppError` (abstracta) → errores específicos en `errors/DomainErrors.ts`. `AppError` asigna `this.name = this.constructor.name`, y el `errorHandler` decide el código HTTP a partir de ese nombre:
 
-- **404**: `EmployeeNotFoundError`, `RestaurantNotFoundError`, `IngredientNotFoundError`, `DishNotFoundError`
+- **404**: `EmployeeNotFoundError`, `RestaurantNotFoundError`, `IngredientNotFoundError`, `DishNotFoundError`, `DiscountCodeNotFoundError`, `PointsRuleNotFoundError`, `BillNotFoundError`, `OrderNotFoundError`
 - **401**: `InvalidCredentialsError`
 - **400**: cualquier otro `AppError`
 - **500**: errores no controlados
 
 Dos excepciones que conviene conocer:
 
-- `OrderNotFoundError` **no** está en la lista de 404. Si llegase al `errorHandler` se traduciría a 400.
+- `OrderNotFoundError` está en la lista de 404 del `errorHandler` (los controladores de descuentos y cuenta delegan en él), pero `OrderController` no lo usa.
 - `OrderController` no delega en el `errorHandler`: es el único controlador que **no llama a `next(error)`**, sino que hace su propio `try/catch` y construye la respuesta a mano. Por eso `GET /orders/:id` sí devuelve 404, pero el `PATCH` de estado devuelve 400 para el mismo error.
 
 ---

@@ -192,3 +192,63 @@ export class InvalidLogoUrlError extends AppError {
     super('Logo URL must be a valid http or https URL')
   }
 }
+
+export class DiscountCodeNotFoundError extends AppError {
+  constructor() {
+    super('Discount code not found')
+  }
+}
+
+export class InvalidDiscountCodeError extends AppError {
+  constructor(message?: string) {
+    super(message ?? 'Invalid or expired discount code')
+  }
+}
+
+export class DuplicatedDiscountCodeError extends AppError {
+  constructor() {
+    super('Discount code already exists')
+  }
+}
+
+export class PointsRuleNotFoundError extends AppError {
+  constructor() {
+    super('Points rule not found')
+  }
+}
+
+export class InvalidPointsRuleError extends AppError {
+  constructor(message?: string) {
+    super(message ?? 'Invalid points rule')
+  }
+}
+
+export class DuplicatedPointsRuleError extends AppError {
+  constructor() {
+    super('A points rule with those points already exists')
+  }
+}
+
+export class InsufficientPointsError extends AppError {
+  constructor() {
+    super('Insufficient points')
+  }
+}
+
+export class BillNotFoundError extends AppError {
+  constructor() {
+    super('Bill not found')
+  }
+}
+
+export class BillAlreadyRequestedError extends AppError {
+  constructor() {
+    super('The bill for this order was already requested')
+  }
+}
+
+export class InvalidBillError extends AppError {
+  constructor(message?: string) {
+    super(message ?? 'Invalid bill')
+  }
+}

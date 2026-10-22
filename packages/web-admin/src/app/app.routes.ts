@@ -37,6 +37,14 @@ export const routes: Routes = [
             loadChildren: () => import('./features/ingredients/ingredients.routes').then(m => m.INGREDIENT_ROUTES)
           },
           {
+            path: 'discount-codes',
+            loadChildren: () => import('./features/discounts/discounts.routes').then(m => m.DISCOUNT_CODE_ROUTES)
+          },
+          {
+            path: 'points-rules',
+            loadComponent: () => import('./features/discounts/pages/points-rules/points-rules.component').then(m => m.PointsRulesComponent)
+          },
+          {
             path: 'employees',
             loadChildren: () => import('./features/employees/employees.routes').then(m => m.EMPLOYEE_ROUTES)
           }
