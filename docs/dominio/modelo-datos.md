@@ -19,6 +19,7 @@ erDiagram
     restaurants ||--o{ points_rules : "define"
     restaurants ||--o{ client_points : "acumula"
     orders ||--o| bills : "tiene"
+    restaurants ||--o{ restaurant_tables : "tiene"
     dishes ||--o{ order_items : "pedido como"
 
     restaurants {
@@ -128,6 +129,17 @@ erDiagram
         REAL total
         INTEGER points_earned
         TEXT created_at
+    }
+
+    restaurant_tables {
+        TEXT id PK
+        TEXT restaurant_id FK
+        INTEGER number
+        TEXT description
+        INTEGER capacity
+        TEXT status
+        TEXT created_at
+        TEXT updated_at
     }
 ```
 
@@ -332,6 +344,26 @@ Cuenta pedida por el cliente para un pedido, con el desglose de descuentos.
 
 ---
 
+### `restaurant_tables`
+
+Mesas de un restaurante (se llama así para no confundirla con el concepto genérico de "tabla").
+
+| Columna | Tipo | Nullable | Descripción |
+| --- | --- | --- | --- |
+| `id` | TEXT | No | UUID, clave primaria |
+| `number` | INTEGER | No | Número de mesa, entero ≥ 1 |
+| `description` | TEXT | Sí | Descripción (hasta 200 caracteres) |
+| `capacity` | INTEGER | No | Personas que caben (1-50) |
+| `status` | TEXT | No | `libre` (por defecto), `ocupada` o `reservada` |
+| `restaurant_id` | TEXT | No | FK → `restaurants.id` |
+| `created_at` / `updated_at` | TEXT | No | Fechas |
+
+**Restricciones:** `UNIQUE(restaurant_id, number)`, `CHECK(capacity > 0)` y `CHECK(status IN ('libre','ocupada','reservada'))`.
+
+`orders.table_id` guarda el `id` de la mesa, pero **no es FK**: no se añadió para no romper pedidos antiguos con valores libres. La integridad la garantiza `OrderService` al crear el pedido.
+
+---
+
 ## Relaciones
 
 | Relación | Tipo | Descripción |
@@ -347,6 +379,7 @@ Cuenta pedida por el cliente para un pedido, con el desglose de descuentos.
 | Restaurant → PointsRules | 1:N | Un restaurante define varias equivalencias de puntos |
 | Restaurant + cliente → ClientPoints | 1:1 | Un saldo por cliente y restaurante |
 | Order → Bill | 1:0..1 | Un pedido tiene como mucho una cuenta |
+| Restaurant → Tables | 1:N | Un restaurante tiene muchas mesas (`restaurant_tables`) |
 
 ---
 

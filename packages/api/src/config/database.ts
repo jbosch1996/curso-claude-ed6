@@ -212,6 +212,19 @@ export class Database {
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE,
                 FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS restaurant_tables (
+                id TEXT PRIMARY KEY,
+                restaurant_id TEXT NOT NULL,
+                number INTEGER NOT NULL,
+                description TEXT,
+                capacity INTEGER NOT NULL CHECK (capacity > 0),
+                status TEXT NOT NULL DEFAULT 'libre' CHECK (status IN ('libre', 'ocupada', 'reservada')),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(restaurant_id, number),
+                FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
             )
         `.split(';')
 

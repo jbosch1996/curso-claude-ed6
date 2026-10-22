@@ -217,6 +217,19 @@ const seed = async () => {
 
         console.log('Sample discount code (BIENVENIDA10) and points rules (10 = 1€, 100 = 10€) created')
 
+        const tablesByRestaurant: Record<string, number[]> = { 'rest-1': [2, 2, 4, 6], 'rest-2': [2, 4, 6] }
+        for (const [restaurantId, capacities] of Object.entries(tablesByRestaurant)) {
+            for (const [index, capacity] of capacities.entries()) {
+                const now = new Date().toISOString()
+                await dbConfig.run(`
+                    INSERT OR IGNORE INTO restaurant_tables (id, restaurant_id, number, description, capacity, status, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                `, [`${restaurantId}-mesa-${index + 1}`, restaurantId, index + 1, null, capacity, 'libre', now, now])
+            }
+        }
+
+        console.log('Sample tables created')
+
         console.log('\n=== Seed completado ===')
         console.log('\nEmpleados:')
         console.log('  Admin: admin@resttek.com / admin@resttek.com')

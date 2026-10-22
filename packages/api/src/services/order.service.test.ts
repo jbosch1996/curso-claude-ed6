@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { OrderService, type OrderActor } from './order.service.js'
 import { MockOrderRepository } from '@repositories/mocks/MockOrderRepository.js'
 import { MockDishRepository } from '@repositories/mocks/MockDishRepository.js'
+import { MockTableRepository } from '@repositories/mocks/MockTableRepository.js'
+import type { Table } from '@models/table.model.js'
 import type { Order } from '@models/order.model.js'
 import type { Dish } from '@models/dish.model.js'
 import {
@@ -239,5 +241,55 @@ describe('OrderService.getById', () => {
     it('lanza OrderNotFoundError si no existe', async () => {
         await expect(service.getById('no-existe', actor('admin', null)))
             .rejects.toThrow(OrderNotFoundError)
+    })
+})
+
+describe('OrderService.create con mesas', () => {
+    let tableRepo: MockTableRepository
+    let service: OrderService
+
+    const ahora = new Date().toISOString()
+    const mesa = (id: string, restaurantId: string, status: Table['status']): Table => ({
+        id, restaurantId, number: 1, description: null, capacity: 4, status, createdAt: ahora, updatedAt: ahora
+    })
+    const pedido = (tableId: string | null) => ({
+        restaurantId: 'rest-1',
+        tableId,
+        clientId: 'cliente-1',
+        items: [{ dishId: 'dish-1', quantity: 1, notes: null }]
+    })
+
+    beforeEach(async () => {
+        const dishRepo = new MockDishRepository()
+        tableRepo = new MockTableRepository()
+        service = new OrderService(new MockOrderRepository(), dishRepo, tableRepo)
+        await dishRepo.save(plato('dish-1', 'rest-1'))
+        await tableRepo.save(mesa('mesa-ocupada', 'rest-1', 'ocupada'))
+        await tableRepo.save(mesa('mesa-libre', 'rest-1', 'libre'))
+        await tableRepo.save(mesa('mesa-reservada', 'rest-1', 'reservada'))
+        await tableRepo.save(mesa('mesa-otro', 'rest-2', 'ocupada'))
+    })
+
+    it('acepta un pedido en una mesa ocupada del restaurante', async () => {
+        const order = await service.create(pedido('mesa-ocupada'))
+        expect(order.tableId).toBe('mesa-ocupada')
+    })
+
+    it('sigue aceptando un pedido sin mesa', async () => {
+        await expect(service.create(pedido(null))).resolves.toBeDefined()
+    })
+
+    it.each(['mesa-libre', 'mesa-reservada', 'mesa-otro', 'no-existe'])('rechaza la mesa %s', async (tableId) => {
+        await expect(service.create(pedido(tableId))).rejects.toThrow(InvalidOrderError)
+        await expect(service.create(pedido(tableId))).rejects.toThrow('Table is not occupied in this restaurant')
+    })
+
+    it('sin repositorio de mesas no valida el tableId (compatibilidad)', async () => {
+        const sinMesas = new OrderService(new MockOrderRepository(), (() => {
+            const dishRepo = new MockDishRepository()
+            void dishRepo.save(plato('dish-1', 'rest-1'))
+            return dishRepo
+        })())
+        await expect(sinMesas.create(pedido('cualquier-texto'))).resolves.toBeDefined()
     })
 })
