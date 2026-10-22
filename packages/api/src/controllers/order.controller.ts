@@ -1,5 +1,14 @@
 import type { Request, Response } from 'express'
-import type { OrderService } from '@services/order.service.js'
+import type { OrderService, OrderActor } from '@services/order.service.js'
+import type { AuthUser } from '@shared/infrastructure/http/middlewares.js'
+import { AppError } from '@errors/AppError.js'
+
+const STATUS_BY_ERROR: Record<string, number> = {
+    OrderNotFoundError: 404,
+    InvalidOrderStatusError: 400,
+    InvalidOrderError: 400,
+    ForbiddenTransitionError: 403
+}
 
 export class OrderController {
     constructor(private readonly orderService: OrderService) {}
@@ -17,18 +26,23 @@ export class OrderController {
             })
             res.status(201).json(order)
         } catch (error) {
-            if (error instanceof Error) {
-                res.status(400).json({ error: error.message })
-            } else {
-                res.status(500).json({ error: 'Internal Server Error' })
-            }
+            this.handleError(res, error)
         }
     }
 
     async getActiveOrders(req: Request, res: Response): Promise<void> {
         try {
-            const { restaurantId } = req.query
-            if (!restaurantId || typeof restaurantId !== 'string') {
+            const actor = this.getActor(req)
+            let restaurantId: string | null | undefined
+
+            if (actor.role === 'admin') {
+                const queryRestaurantId = req.query.restaurantId
+                restaurantId = typeof queryRestaurantId === 'string' ? queryRestaurantId : undefined
+            } else {
+                restaurantId = actor.restaurantId
+            }
+
+            if (!restaurantId) {
                 res.status(400).json({ error: 'restaurantId is required' })
                 return
             }
@@ -36,7 +50,7 @@ export class OrderController {
             const orders = await this.orderService.listActive(restaurantId)
             res.status(200).json(orders)
         } catch (error) {
-            res.status(500).json({ error: 'Internal Server Error' })
+            this.handleError(res, error)
         }
     }
 
@@ -50,20 +64,16 @@ export class OrderController {
             const orders = await this.orderService.getByClientId(user.id)
             res.status(200).json(orders)
         } catch (error) {
-            res.status(500).json({ error: 'Internal Server Error' })
+            this.handleError(res, error)
         }
     }
 
     async getById(req: Request, res: Response): Promise<void> {
         try {
-            const order = await this.orderService.getById(req.params.id as string)
+            const order = await this.orderService.getById(req.params.id as string, this.getActor(req))
             res.status(200).json(order)
         } catch (error) {
-            if (error instanceof Error && error.name === 'OrderNotFoundError') {
-                res.status(404).json({ error: error.message })
-            } else {
-                res.status(500).json({ error: 'Internal Server Error' })
-            }
+            this.handleError(res, error)
         }
     }
 
@@ -71,16 +81,34 @@ export class OrderController {
         try {
             const orderId = req.params.orderId as string
             const itemId = req.params.itemId as string
-            const { status } = req.body
+            const { status } = req.body ?? {}
 
-            await this.orderService.updateItemStatus(orderId, itemId, status)
+            if (typeof status !== 'string') {
+                res.status(400).json({ error: 'status is required' })
+                return
+            }
+
+            await this.orderService.updateItemStatus(orderId, itemId, status, this.getActor(req))
             res.status(204).send()
         } catch (error) {
-            if (error instanceof Error && (error.name === 'OrderNotFoundError' || error.name === 'InvalidOrderStatusError')) {
-                res.status(400).json({ error: error.message })
-            } else {
-                res.status(500).json({ error: 'Internal Server Error' })
-            }
+            this.handleError(res, error)
         }
+    }
+
+    private getActor(req: Request): OrderActor {
+        const user = (req as any).user as AuthUser | undefined
+        return {
+            id: user?.id ?? '',
+            role: user?.role ?? '',
+            restaurantId: user?.restaurantId ?? null
+        }
+    }
+
+    private handleError(res: Response, error: unknown): void {
+        if (error instanceof AppError) {
+            res.status(STATUS_BY_ERROR[error.name] ?? 400).json({ error: error.message })
+            return
+        }
+        res.status(500).json({ error: 'Internal Server Error' })
     }
 }

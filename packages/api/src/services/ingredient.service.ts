@@ -1,8 +1,9 @@
 import { randomUUID } from 'crypto'
 import type { Ingredient } from '@models/ingredient.model.js'
 import { normalizeIngredientUnit } from '@models/ingredient.model.js'
+import { assertNonNegativeNumber } from '@models/validation.js'
 import type { IngredientRepository } from '@repositories/ingredient.repository.js'
-import { IngredientNameRequiredError, NegativeStockError, RestaurantIdRequiredError, IngredientNotFoundError } from '@errors/DomainErrors.js'
+import { IngredientNameRequiredError, InvalidNumberError, NegativeStockError, RestaurantIdRequiredError, IngredientNotFoundError } from '@errors/DomainErrors.js'
 
 export interface CreateIngredientDTO {
     name: string
@@ -36,8 +37,8 @@ export class IngredientService {
         return ingredient
     }
 
-    async update(id: string, dto: UpdateIngredientDTO): Promise<Ingredient> {
-        const existing = await this.ingredientRepository.findById(id)
+    async update(restaurantId: string, id: string, dto: UpdateIngredientDTO): Promise<Ingredient> {
+        const existing = await this.findById(restaurantId, id)
         if (!existing) {
             throw new IngredientNotFoundError()
         }
@@ -56,16 +57,20 @@ export class IngredientService {
         return updated
     }
 
-    async delete(id: string): Promise<void> {
-        const existing = await this.ingredientRepository.findById(id)
+    async delete(restaurantId: string, id: string): Promise<void> {
+        const existing = await this.findById(restaurantId, id)
         if (!existing) {
             throw new IngredientNotFoundError()
         }
         await this.ingredientRepository.delete(id)
     }
 
-    async findById(id: string): Promise<Ingredient | null> {
-        return this.ingredientRepository.findById(id)
+    async findById(restaurantId: string, id: string): Promise<Ingredient | null> {
+        const ingredient = await this.ingredientRepository.findById(id)
+        if (!ingredient || ingredient.restaurantId !== restaurantId) {
+            return null
+        }
+        return ingredient
     }
 
     async findByRestaurantId(restaurantId: string): Promise<Ingredient[]> {
@@ -84,9 +89,10 @@ export class IngredientService {
         if (!props.name || props.name.trim() === '') {
             throw new IngredientNameRequiredError()
         }
-        if (props.currentStock < 0) {
-            throw new NegativeStockError()
-        }
+        const stockError = typeof props.currentStock === 'number' && props.currentStock < 0
+            ? new NegativeStockError()
+            : new InvalidNumberError('Stock must be a finite number')
+        assertNonNegativeNumber(props.currentStock, stockError)
         if (!props.restaurantId || props.restaurantId.trim() === '') {
             throw new RestaurantIdRequiredError()
         }

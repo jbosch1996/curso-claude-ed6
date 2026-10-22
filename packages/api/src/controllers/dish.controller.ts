@@ -34,7 +34,7 @@ export class DishController {
 
     getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const dish = await this.dishService.findById(req.params.id as string)
+            const dish = await this.dishService.findById(req.params.restaurantId as string, req.params.id as string)
             if (!dish) {
                 throw new DishNotFoundError()
             }
@@ -46,7 +46,7 @@ export class DishController {
 
     update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const dish = await this.dishService.update(req.params.id as string, {
+            const dish = await this.dishService.update(req.params.restaurantId as string, req.params.id as string, {
                 name: req.body.name,
                 description: req.body.description ?? null,
                 price: req.body.price,
@@ -62,7 +62,7 @@ export class DishController {
 
     delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            await this.dishService.delete(req.params.id as string)
+            await this.dishService.delete(req.params.restaurantId as string, req.params.id as string)
             res.status(204).send()
         } catch (error) {
             next(error)

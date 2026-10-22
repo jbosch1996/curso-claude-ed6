@@ -1,10 +1,15 @@
 import type { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
+import { JWT_SECRET } from '@config/env.js'
 
-const JWT_SECRET: string = process.env.JWT_SECRET || 'super-secret-resttek-key'
+export interface AuthUser {
+    id: string
+    role: string
+    restaurantId: string | null
+}
 
 export interface AuthRequest extends Request {
-    user?: any
+    user?: AuthUser
 }
 
 export const authenticate = (req: AuthRequest, res: Response, next: NextFunction): void => {
@@ -22,8 +27,8 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
     }
 
     try {
-        const decoded = jwt.verify(token, JWT_SECRET)
-        req.user = decoded
+        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] })
+        req.user = decoded as AuthUser
         next()
     } catch {
         res.status(401).json({ error: 'Unauthorized: Invalid token' })
@@ -34,6 +39,21 @@ export const authorize = (roles: string[]) => {
     return (req: AuthRequest, res: Response, next: NextFunction): void => {
         if (!req.user || !roles.includes(req.user.role)) {
             res.status(403).json({ error: 'Forbidden: Insufficient permissions' })
+            return
+        }
+        next()
+    }
+}
+
+export const requireRestaurantAccess = (param: string = 'restaurantId') => {
+    return (req: AuthRequest, res: Response, next: NextFunction): void => {
+        const user = req.user
+        if (user?.role === 'admin') {
+            next()
+            return
+        }
+        if (!user || !user.restaurantId || user.restaurantId !== req.params[param]) {
+            res.status(403).json({ error: 'Forbidden: No access to this restaurant' })
             return
         }
         next()

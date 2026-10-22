@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { IngredientService } from './ingredient.service.js'
 import { normalizeIngredientUnit } from '@models/ingredient.model.js'
+import { InvalidNumberError, NegativeStockError } from '@errors/DomainErrors.js'
 import { MockIngredientRepository } from '@repositories/mocks/MockIngredientRepository.js'
 
 describe('normalizeIngredientUnit', () => {
@@ -84,7 +85,7 @@ describe('IngredientService', () => {
         it('should update an existing ingredient', async () => {
             const created = await service.create(validInput)
 
-            const updated = await service.update(created.id, {
+            const updated = await service.update('r1', created.id, {
                 name: 'Tomate Cherry',
                 unit: 'kg',
                 currentStock: 15
@@ -95,11 +96,38 @@ describe('IngredientService', () => {
         })
 
         it('should throw IngredientNotFoundError for non-existent id', async () => {
-            await expect(service.update('non-existent', {
+            await expect(service.update('r1', 'non-existent', {
                 name: 'X',
                 unit: 'kg',
                 currentStock: 0
             })).rejects.toThrow('Ingredient not found')
+        })
+
+        it('should throw IngredientNotFoundError when the ingredient belongs to another restaurant', async () => {
+            const created = await service.create(validInput)
+
+            await expect(service.update('otro-restaurante', created.id, {
+                name: 'Hackeado',
+                unit: 'kg',
+                currentStock: 999
+            })).rejects.toThrow('Ingredient not found')
+
+            const intacto = await repo.findById(created.id)
+            expect(intacto?.name).toBe('Tomate')
+        })
+    })
+
+    describe('findById', () => {
+        it('should return the ingredient of the same restaurant', async () => {
+            const created = await service.create(validInput)
+            const found = await service.findById('r1', created.id)
+            expect(found?.id).toBe(created.id)
+        })
+
+        it('should return null when the ingredient belongs to another restaurant', async () => {
+            const created = await service.create(validInput)
+            const found = await service.findById('otro-restaurante', created.id)
+            expect(found).toBeNull()
         })
     })
 
@@ -107,15 +135,43 @@ describe('IngredientService', () => {
         it('should delete an existing ingredient', async () => {
             const created = await service.create(validInput)
 
-            await service.delete(created.id)
+            await service.delete('r1', created.id)
 
             const found = await repo.findById(created.id)
             expect(found).toBeNull()
         })
 
         it('should throw IngredientNotFoundError for non-existent id', async () => {
-            await expect(service.delete('non-existent'))
+            await expect(service.delete('r1', 'non-existent'))
                 .rejects.toThrow('Ingredient not found')
+        })
+
+        it('should not delete an ingredient of another restaurant', async () => {
+            const created = await service.create(validInput)
+
+            await expect(service.delete('otro-restaurante', created.id))
+                .rejects.toThrow('Ingredient not found')
+
+            const sigueExistiendo = await repo.findById(created.id)
+            expect(sigueExistiendo).not.toBeNull()
+        })
+    })
+
+    describe('validación de currentStock', () => {
+        it.each(['10', NaN, Infinity, null, undefined])('should reject stock %s on create', async (stock) => {
+            await expect(service.create({ ...validInput, currentStock: stock as number }))
+                .rejects.toThrow(InvalidNumberError)
+        })
+
+        it('should reject a string stock on update', async () => {
+            const created = await service.create(validInput)
+            await expect(service.update(validInput.restaurantId, created.id, { name: 'Tomate', unit: 'kg', currentStock: '10' as unknown as number }))
+                .rejects.toThrow(InvalidNumberError)
+        })
+
+        it('should keep rejecting negative stock with NegativeStockError', async () => {
+            await expect(service.create({ ...validInput, currentStock: -0.5 }))
+                .rejects.toThrow(NegativeStockError)
         })
     })
 })

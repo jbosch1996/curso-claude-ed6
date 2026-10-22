@@ -1,8 +1,10 @@
 import { randomUUID } from 'crypto'
 import type { Dish, DishIngredient } from '@models/dish.model.js'
 import { normalizeDishCategory, validateDishIngredient } from '@models/dish.model.js'
+import { assertPositiveNumber } from '@models/validation.js'
 import type { DishRepository } from '@repositories/dish.repository.js'
-import { DishNameRequiredError, InvalidPriceError, RestaurantIdRequiredError, DishNotFoundError } from '@errors/DomainErrors.js'
+import type { IngredientRepository } from '@repositories/ingredient.repository.js'
+import { DishNameRequiredError, InvalidPriceError, RestaurantIdRequiredError, DishNotFoundError, InvalidDishIngredientError } from '@errors/DomainErrors.js'
 
 interface CreateDishInput {
     name: string
@@ -19,12 +21,15 @@ interface UpdateDishInput {
     description: string | null
     price: number
     category: string
-    available: boolean
+    available?: boolean
     ingredients: DishIngredient[]
 }
 
 export class DishService {
-    constructor(private readonly dishRepository: DishRepository) {}
+    constructor(
+        private readonly dishRepository: DishRepository,
+        private readonly ingredientRepository: IngredientRepository
+    ) {}
 
     async create(input: CreateDishInput): Promise<Dish> {
         const now = new Date().toISOString()
@@ -41,12 +46,13 @@ export class DishService {
             updatedAt: now
         })
 
+        await this.assertIngredientsBelongToRestaurant(dish.restaurantId, dish.ingredients)
         await this.dishRepository.save(dish)
         return dish
     }
 
-    async update(id: string, input: UpdateDishInput): Promise<Dish> {
-        const existing = await this.dishRepository.findById(id)
+    async update(restaurantId: string, id: string, input: UpdateDishInput): Promise<Dish> {
+        const existing = await this.findById(restaurantId, id)
         if (!existing) {
             throw new DishNotFoundError()
         }
@@ -58,31 +64,45 @@ export class DishService {
             description: input.description,
             price: input.price,
             category: input.category,
-            available: input.available,
+            available: input.available ?? existing.available,
             restaurantId: existing.restaurantId,
             ingredients: input.ingredients ?? [],
             createdAt: existing.createdAt,
             updatedAt: now
         })
 
+        await this.assertIngredientsBelongToRestaurant(updated.restaurantId, updated.ingredients)
         await this.dishRepository.save(updated)
         return updated
     }
 
-    async delete(id: string): Promise<void> {
-        const dish = await this.dishRepository.findById(id)
+    async delete(restaurantId: string, id: string): Promise<void> {
+        const dish = await this.findById(restaurantId, id)
         if (!dish) {
             throw new DishNotFoundError()
         }
         await this.dishRepository.delete(id)
     }
 
-    async findById(id: string): Promise<Dish | null> {
-        return this.dishRepository.findById(id)
+    async findById(restaurantId: string, id: string): Promise<Dish | null> {
+        const dish = await this.dishRepository.findById(id)
+        if (!dish || dish.restaurantId !== restaurantId) {
+            return null
+        }
+        return dish
     }
 
     async findByRestaurantId(restaurantId: string): Promise<Dish[]> {
         return this.dishRepository.findByRestaurantId(restaurantId)
+    }
+
+    private async assertIngredientsBelongToRestaurant(restaurantId: string, ingredients: DishIngredient[]): Promise<void> {
+        for (const { ingredientId } of ingredients) {
+            const ingredient = await this.ingredientRepository.findById(ingredientId)
+            if (!ingredient || ingredient.restaurantId !== restaurantId) {
+                throw new InvalidDishIngredientError(`Ingredient ${ingredientId} does not belong to this restaurant`)
+            }
+        }
     }
 
     private buildDish(props: {
@@ -100,9 +120,7 @@ export class DishService {
         if (!props.name || props.name.trim() === '') {
             throw new DishNameRequiredError()
         }
-        if (props.price <= 0) {
-            throw new InvalidPriceError()
-        }
+        assertPositiveNumber(props.price, new InvalidPriceError())
         if (!props.restaurantId || props.restaurantId.trim() === '') {
             throw new RestaurantIdRequiredError()
         }

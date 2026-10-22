@@ -47,11 +47,21 @@ export class SqliteOrderRepository implements OrderRepository {
             [order.id, order.restaurantId, order.tableId, order.clientId, order.createdAt.toISOString()]
         )
 
-        for (const item of order.items) {
+        if (order.items.length === 0) return
+
+        // Los ítems se insertan en una sola sentencia (atómica). Si falla, se borra el
+        // pedido recién creado para no dejarlo a medias. No se usa BEGIN/COMMIT porque la
+        // conexión SQLite es compartida y envolvería las escrituras de otras peticiones.
+        const placeholders = order.items.map(() => '(?, ?, ?, ?, ?, ?)').join(', ')
+        const params = order.items.flatMap(item => [item.id, order.id, item.dishId, item.quantity, item.notes, item.status])
+        try {
             await this.db.run(
-                'INSERT INTO order_items (id, order_id, dish_id, quantity, notes, status) VALUES (?, ?, ?, ?, ?, ?)',
-                [item.id, order.id, item.dishId, item.quantity, item.notes, item.status]
+                `INSERT INTO order_items (id, order_id, dish_id, quantity, notes, status) VALUES ${placeholders}`,
+                params
             )
+        } catch (error) {
+            await this.db.run('DELETE FROM orders WHERE id = ?', [order.id])
+            throw error
         }
     }
 

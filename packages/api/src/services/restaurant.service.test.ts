@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { RestaurantService } from './restaurant.service.js'
+import { InvalidLogoUrlError } from '@errors/DomainErrors.js'
 import { MockRestaurantRepository } from '@repositories/mocks/MockRestaurantRepository.js'
 
 describe('RestaurantService', () => {
@@ -120,6 +121,30 @@ describe('RestaurantService', () => {
 
             const results = await service.getAll()
             expect(results).toHaveLength(2)
+        })
+    })
+
+    describe('logoUrl', () => {
+        it.each(['javascript:alert(1)', 'data:text/html;base64,AAAA', 'no es url'])('should reject logoUrl %s on create', async (logoUrl) => {
+            await expect(service.create({ ...validDTO, logoUrl })).rejects.toThrow(InvalidLogoUrlError)
+        })
+
+        it('should accept an https logoUrl', async () => {
+            const result = await service.create({ ...validDTO, logoUrl: 'https://example.com/logo.png' })
+            expect(result.logoUrl).toBe('https://example.com/logo.png')
+        })
+
+        it('should reject a javascript: logoUrl on update and keep the stored one', async () => {
+            const created = await service.create(validDTO)
+            await expect(service.update(created.id, { ...validDTO, logoUrl: 'javascript:alert(1)' }))
+                .rejects.toThrow(InvalidLogoUrlError)
+            expect((await repo.findById(created.id))?.logoUrl).toBeNull()
+        })
+
+        it('should accept null logoUrl on update', async () => {
+            const created = await service.create({ ...validDTO, logoUrl: 'https://example.com/a.png' })
+            const updated = await service.update(created.id, { ...validDTO, logoUrl: null })
+            expect(updated.logoUrl).toBeNull()
         })
     })
 })
