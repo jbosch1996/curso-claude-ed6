@@ -15,6 +15,7 @@ erDiagram
     dishes ||--o{ dish_ingredients : "contiene"
     ingredients ||--o{ dish_ingredients : "usado en"
     orders ||--o{ order_items : "contiene"
+    restaurants ||--o{ restaurant_tables : "tiene"
     dishes ||--o{ order_items : "pedido como"
 
     restaurants {
@@ -83,6 +84,17 @@ erDiagram
         INTEGER quantity
         TEXT notes
         TEXT status
+    }
+
+    restaurant_tables {
+        TEXT id PK
+        TEXT restaurant_id FK
+        INTEGER number
+        TEXT description
+        INTEGER capacity
+        TEXT status
+        TEXT created_at
+        TEXT updated_at
     }
 ```
 
@@ -215,6 +227,26 @@ Líneas de pedido. Cada ítem es un plato con cantidad y estado.
 
 ---
 
+### `restaurant_tables`
+
+Mesas de un restaurante (se llama así para no confundirla con el concepto genérico de "tabla").
+
+| Columna | Tipo | Nullable | Descripción |
+| --- | --- | --- | --- |
+| `id` | TEXT | No | UUID, clave primaria |
+| `number` | INTEGER | No | Número de mesa, entero ≥ 1 |
+| `description` | TEXT | Sí | Descripción (hasta 200 caracteres) |
+| `capacity` | INTEGER | No | Personas que caben (1-50) |
+| `status` | TEXT | No | `libre` (por defecto), `ocupada` o `reservada` |
+| `restaurant_id` | TEXT | No | FK → `restaurants.id` |
+| `created_at` / `updated_at` | TEXT | No | Fechas |
+
+**Restricciones:** `UNIQUE(restaurant_id, number)`, `CHECK(capacity > 0)` y `CHECK(status IN ('libre','ocupada','reservada'))`.
+
+`orders.table_id` guarda el `id` de la mesa, pero **no es FK**: no se añadió para no romper pedidos antiguos con valores libres. La integridad la garantiza `OrderService` al crear el pedido.
+
+---
+
 ## Relaciones
 
 | Relación | Tipo | Descripción |
@@ -226,6 +258,7 @@ Líneas de pedido. Cada ítem es un plato con cantidad y estado.
 | Dish ↔ Ingredient | N:M | Un plato usa varios ingredientes (via `dish_ingredients`) |
 | Order → OrderItems | 1:N | Un pedido tiene varios ítems |
 | Dish → OrderItems | 1:N | Un plato puede estar en varios ítems de pedido |
+| Restaurant → Tables | 1:N | Un restaurante tiene muchas mesas (`restaurant_tables`) |
 
 ---
 

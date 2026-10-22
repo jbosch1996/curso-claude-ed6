@@ -1,0 +1,137 @@
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.page-header h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tables-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.table-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.table-card.state-libre {
+  border-left-color: var(--green-light);
+}
+
+.table-card.state-ocupada {
+  border-left-color: #ef4444;
+}
+
+.table-card.state-reservada {
+  border-left-color: var(--yellow);
+}
+
+.table-header {
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.table-number {
+  display: block;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.table-description {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.table-capacity {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.table-status {
+  padding: 0 16px 14px;
+}
+
+.status-select {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+}
+
+.table-orders {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.order-id {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.order-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.no-orders {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 20px;
+  text-transform: capitalize;
+}
+
+.badge-pendiente {
+  background: var(--yellow-glow);
+  color: var(--yellow);
+}
+
+.badge-preparando {
+  background: var(--orange-glow);
+  color: var(--orange);
+}
+
+.badge-listo {
+  background: var(--green-glow);
+  color: var(--green-light);
+}
+
+.badge-entregado {
+  background: rgba(139, 146, 168, 0.1);
+  color: var(--text-muted);
+}

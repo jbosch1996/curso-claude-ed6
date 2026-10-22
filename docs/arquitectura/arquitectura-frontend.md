@@ -336,6 +336,18 @@ export class ShellComponent {
 
 El rol de gerente es `'manager'`, no `'gerente'`. La autorización real es responsabilidad de la API.
 
+La entrada "Mesas" (`/mesas`, `canSeeMesas`: camarero y manager, como Salón) muestra las mesas del restaurante con su estado, permite cambiarlo y lista los pedidos activos de cada mesa ocupada (cruza `TableStore` con `OrderStore` por `tableId`); ambos stores hacen polling cada 30 s.
+
+### Rutas de mesas
+
+| App | Ruta | Descripción |
+| --- | --- | --- |
+| `web-admin` | `/restaurants/:restaurantId/tables` (`new`, `:id/edit`) | CRUD de mesas (feature `tables`, tarjeta "Mesas" en el panel del restaurante) |
+| `web-empleados` | `/mesas` | Estados de mesas y pedidos de las mesas ocupadas |
+| `web-clientes` | `/restaurants/:id/table` | Selección de mesa: número de personas → mesas libres → "Continuar" ocupa la mesa |
+
+En `web-clientes` el listado de restaurantes enlaza a `/restaurants/:id/table`; la mesa elegida se guarda en `CartStore` (`tableId`, `tableNumber`, asociada a un `tableRestaurantId`), la carta (`/restaurants/:id`) redirige a la selección si no hay mesa para ese restaurante, y `CartComponent` envía el `tableId` al crear el pedido. La mesa solo vive en memoria (se pierde al recargar la página, aunque siga ocupada en la API) y `CartStore.clear()` **no** la borra, para que el cliente pueda pedir de nuevo en la misma mesa; solo se limpia al cambiar de restaurante.
+
 ---
 
 ## Configuración de Angular

@@ -17,6 +17,7 @@ Terminología del dominio y conceptos técnicos utilizados en el proyecto Restte
 | **DishIngredient** | Relación entre un plato y un ingrediente, con la cantidad necesaria. |
 | **Order** | Pedido realizado por un cliente. Contiene ítems (platos) y está asociado a un restaurante. |
 | **OrderItem** | Línea de un pedido: un plato con cantidad, notas opcionales y estado. |
+| **Table (mesa)** | Mesa de un restaurante, con número, descripción opcional, capacidad y estado. Se guarda en `restaurant_tables`. Estados: `libre` (se puede ocupar), `ocupada` (un cliente la tiene; los pedidos con mesa solo se aceptan para mesas ocupadas) y `reservada` (fijada a mano por admin o empleados; sin fecha ni titular). Solo los empleados o el admin la devuelven a `libre`. |
 
 Dos particularidades del modelo que conviene tener presentes:
 

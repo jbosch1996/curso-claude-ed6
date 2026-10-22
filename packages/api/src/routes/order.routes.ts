@@ -4,6 +4,7 @@ import { OrderService } from '@services/order.service.js'
 import { SqliteOrderRepository } from '@repositories/order.repository.js'
 import { dbConfig } from '@config/database.js'
 import { SqliteDishRepository } from '@repositories/dish.repository.js'
+import { SqliteTableRepository } from '@repositories/table.repository.js'
 import { authenticate, authorize } from '@shared/infrastructure/http/middlewares.js'
 
 const STAFF_ROLES = ['admin', 'manager', 'camarero', 'cocinero']
@@ -24,4 +25,6 @@ export const createOrderRouter = (orderService: OrderService): Router => {
 const orderRepository = new SqliteOrderRepository(dbConfig)
 const dishRepository = new SqliteDishRepository(dbConfig)
 
-export default createOrderRouter(new OrderService(orderRepository, dishRepository))
+const tableRepository = new SqliteTableRepository(dbConfig)
+
+export default createOrderRouter(new OrderService(orderRepository, dishRepository, tableRepository))

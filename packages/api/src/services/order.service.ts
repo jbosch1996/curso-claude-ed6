@@ -3,6 +3,7 @@ import type { Order, OrderItem } from '@models/order.model.js'
 import { normalizeOrderStatus, assertTransitionAllowed } from '@models/order.model.js'
 import type { OrderRepository } from '@repositories/order.repository.js'
 import type { DishRepository } from '@repositories/dish.repository.js'
+import type { TableRepository } from '@repositories/table.repository.js'
 import { RestaurantIdRequiredError, OrderNotFoundError, InvalidOrderError } from '@errors/DomainErrors.js'
 
 const MAX_LINES = 50
@@ -32,7 +33,8 @@ export interface CreateOrderRequest {
 export class OrderService {
     constructor(
         private readonly orderRepository: OrderRepository,
-        private readonly dishRepository: DishRepository
+        private readonly dishRepository: DishRepository,
+        private readonly tableRepository?: TableRepository
     ) {}
 
     async create(request: CreateOrderRequest): Promise<Order> {
@@ -41,6 +43,7 @@ export class OrderService {
         }
 
         this.validateTableId(request.tableId)
+        await this.assertTableOccupied(request.restaurantId, request.tableId)
         this.validateItems(request.items)
         await this.assertDishesOrderable(request.restaurantId, request.items)
 
@@ -119,6 +122,14 @@ export class OrderService {
         if (tableId === null || tableId === undefined) return
         if (typeof tableId !== 'string' || tableId.length > MAX_TABLE_ID_LENGTH) {
             throw new InvalidOrderError(`tableId must be a string of at most ${MAX_TABLE_ID_LENGTH} characters`)
+        }
+    }
+
+    private async assertTableOccupied(restaurantId: string, tableId: string | null): Promise<void> {
+        if (tableId === null || tableId === undefined || !this.tableRepository) return
+        const table = await this.tableRepository.findById(tableId)
+        if (!table || table.restaurantId !== restaurantId || table.status !== 'ocupada') {
+            throw new InvalidOrderError('Table is not occupied in this restaurant')
         }
     }
 

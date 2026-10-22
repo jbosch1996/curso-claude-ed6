@@ -51,7 +51,7 @@ contexts/employee/
 
 `contexts/shared/` no es un bounded context de negocio: contiene el value object `Email` y los middlewares y el `errorHandler` de Express.
 
-### 2. Por capas → `restaurant`, `dish`, `ingredient`, `order`
+### 2. Por capas → `restaurant`, `dish`, `ingredient`, `order` y `table`
 
 El resto de dominios **no** usan bounded contexts. Se organizan en carpetas transversales por tipo de fichero:
 
@@ -315,16 +315,38 @@ Los ingredientes son **más restrictivos** que los platos: solo `admin` puede cr
 | Método | Ruta | Roles |
 | --- | --- | --- |
 | `POST` | `/api/v1/orders` | autenticado — el `clientId` se toma del JWT, no del body |
-| `GET` | `/api/v1/orders/active` | autenticado — **requiere `?restaurantId=`** (400 si falta) |
+| `GET` | `/api/v1/orders/active` | admin, manager, camarero, cocinero — el admin **requiere `?restaurantId=`** (400 si falta); el resto ve su restaurante |
 | `GET` | `/api/v1/orders/mine` | autenticado — pedidos del usuario del JWT |
 | `GET` | `/api/v1/orders/:id` | autenticado |
-| `PATCH` | `/api/v1/orders/:orderId/items/:itemId/status` | autenticado — devuelve 204 sin cuerpo |
+| `PATCH` | `/api/v1/orders/:orderId/items/:itemId/status` | admin, manager, camarero, cocinero (transición permitida por rol) — devuelve 204 sin cuerpo |
 
-Ninguna ruta de pedidos aplica `authorize()`: cualquier usuario autenticado puede cambiar el estado de cualquier ítem.
+`POST /orders`, `GET /orders/mine` y `GET /orders/:id` solo exigen JWT (el servicio comprueba que el pedido sea del cliente o del personal de su restaurante); `GET /orders/active` y el `PATCH` de estado aplican `authorize()` con los roles de personal y, además, el servicio valida la transición de estado por rol.
 
 `GET /orders/active` devuelve los pedidos del restaurante que tengan **al menos un ítem** en estado distinto de `entregado`.
 
 Al crear un pedido, el servicio **expande las cantidades**: un ítem con `quantity: 3` se guarda como 3 filas de `order_items` con `quantity: 1` cada una, para poder seguir el estado de cada unidad por separado.
+
+Si el pedido trae `tableId`, `OrderService.create` comprueba (cuando recibe el `TableRepository`, que el cableado por defecto de `order.routes.ts` le pasa) que sea una mesa **ocupada del mismo restaurante**; si no, `InvalidOrderError('Table is not occupied in this restaurant')`. `tableId` guarda el `id` de la mesa; sigue sin haber FK en `orders.table_id`, y un pedido sin mesa (`null`) sigue siendo válido.
+
+### Mesas
+
+Por capas: `models/table.model.ts`, `repositories/table.repository.ts` (+ `mocks/MockTableRepository.ts`), `services/table.service.ts`, `controllers/table.controller.ts`, `routes/table.routes.ts` (factory `createTableRouter(service)`). Cada mesa tiene número (único por restaurante), descripción opcional, capacidad (1-50) y estado `libre | ocupada | reservada`.
+
+| Método | Ruta | Roles |
+| --- | --- | --- |
+| `GET` | `/api/v1/restaurants/:restaurantId/tables/available?guests=N` | `cliente` — mesas libres con capacidad ≥ N, sin estado (`id, number, description, capacity`) |
+| `POST` | `/api/v1/restaurants/:restaurantId/tables/:id/occupy` | `cliente` — body `{ guests }`; 200 o 400 `TableNotAvailableError` |
+| `GET` | `/api/v1/restaurants/:restaurantId/tables` | admin, manager, camarero, cocinero (+ `requireRestaurantAccess`) — con estado |
+| `GET` | `/api/v1/restaurants/:restaurantId/tables/:id` | ídem — 404 si es de otro restaurante |
+| `PATCH` | `/api/v1/restaurants/:restaurantId/tables/:id/status` | ídem — body `{ status }`, cambio libre entre los tres estados |
+| `POST` | `/api/v1/restaurants/:restaurantId/tables` | admin (+ `requireRestaurantAccess`) — 201 |
+| `PUT` | `/api/v1/restaurants/:restaurantId/tables/:id` | admin (+ `requireRestaurantAccess`) |
+| `DELETE` | `/api/v1/restaurants/:restaurantId/tables/:id` | admin (+ `requireRestaurantAccess`) — 204; `TableOccupiedError` (400) si está ocupada |
+
+Dos detalles que conviene conocer:
+
+- **Las rutas del cliente no usan `requireRestaurantAccess`**: un cliente tiene `restaurantId` nulo y el middleware lo rechazaría; el `restaurantId` de la URL acota la consulta. `/available` se declara antes de `/:id`.
+- **La ocupación es atómica**: `occupyIfAvailable` es un único `UPDATE … WHERE status = 'libre' AND capacity >= ?` y devuelve `changes === 1`, así que dos clientes que piden la misma mesa a la vez no pueden ocuparla ambos. Si no se puede (no existe, es de otro restaurante, está ocupada, reservada o es pequeña) siempre se devuelve el mismo `Table is not available`.
 
 ---
 
@@ -345,7 +367,7 @@ Ambos responden directamente, sin pasar por el `errorHandler`.
 
 Jerarquía: `Error` → `AppError` (abstracta) → errores específicos en `errors/DomainErrors.ts`. `AppError` asigna `this.name = this.constructor.name`, y el `errorHandler` decide el código HTTP a partir de ese nombre:
 
-- **404**: `EmployeeNotFoundError`, `RestaurantNotFoundError`, `IngredientNotFoundError`, `DishNotFoundError`
+- **404**: `EmployeeNotFoundError`, `RestaurantNotFoundError`, `IngredientNotFoundError`, `DishNotFoundError`, `TableNotFoundError`
 - **401**: `InvalidCredentialsError`
 - **400**: cualquier otro `AppError`
 - **500**: errores no controlados
