@@ -6,6 +6,9 @@ export interface OrderItem {
   status: string
   dishName?: string
   dishPrice?: number
+  packId?: string
+  packName?: string
+  packInstanceId?: string
 }
 
 export interface Order {

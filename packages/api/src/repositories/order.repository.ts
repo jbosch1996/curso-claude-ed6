@@ -28,6 +28,9 @@ interface OrderItemWithDishRow extends OrderItemRow {
     dish_name: string
     dish_price: number
     dish_category: string
+    pack_id: string | null
+    pack_name: string | null
+    pack_instance_id: string | null
 }
 
 export interface OrderRepository {
@@ -59,10 +62,24 @@ export class SqliteOrderRepository implements OrderRepository {
                 `INSERT INTO order_items (id, order_id, dish_id, quantity, notes, status) VALUES ${placeholders}`,
                 params
             )
+            await this.createPackItems(order)
         } catch (error) {
             await this.db.run('DELETE FROM orders WHERE id = ?', [order.id])
             throw error
         }
+    }
+
+    // Los datos de pack van en order_item_packs con el precio cobrado (order_items no cambia).
+    private async createPackItems(order: Order): Promise<void> {
+        const packItems = order.items.filter(item => item.packInstanceId)
+        if (packItems.length === 0) return
+
+        const placeholders = packItems.map(() => '(?, ?, ?, ?, ?)').join(', ')
+        const params = packItems.flatMap(item => [item.id, item.packId, item.packName, item.packInstanceId, item.dishPrice ?? 0])
+        await this.db.run(
+            `INSERT INTO order_item_packs (order_item_id, pack_id, pack_name, pack_instance_id, unit_price) VALUES ${placeholders}`,
+            params
+        )
     }
 
     async findById(id: string): Promise<Order | null> {
@@ -152,9 +169,11 @@ export class SqliteOrderRepository implements OrderRepository {
 
     private async getOrderItems(orderId: string): Promise<OrderItem[]> {
         const itemRows = await this.db.all<OrderItemWithDishRow>(`
-            SELECT oi.*, d.name as dish_name, d.price as dish_price, d.category as dish_category
+            SELECT oi.*, d.name as dish_name, COALESCE(oip.unit_price, d.price) as dish_price, d.category as dish_category,
+                   oip.pack_id, oip.pack_name, oip.pack_instance_id
             FROM order_items oi
             LEFT JOIN dishes d ON oi.dish_id = d.id
+            LEFT JOIN order_item_packs oip ON oip.order_item_id = oi.id
             WHERE oi.order_id = ?
         `, [orderId])
 
@@ -166,7 +185,10 @@ export class SqliteOrderRepository implements OrderRepository {
             status: normalizeOrderStatus(row.status),
             dishName: row.dish_name,
             dishPrice: row.dish_price,
-            dishCategory: row.dish_category
+            dishCategory: row.dish_category,
+            ...(row.pack_instance_id
+                ? { packId: row.pack_id as string, packName: row.pack_name as string, packInstanceId: row.pack_instance_id }
+                : {})
         }))
     }
 }

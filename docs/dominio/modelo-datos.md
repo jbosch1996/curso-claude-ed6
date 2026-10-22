@@ -362,6 +362,53 @@ Mesas de un restaurante (se llama así para no confundirla con el concepto gené
 
 `orders.table_id` guarda el `id` de la mesa, pero **no es FK**: no se añadió para no romper pedidos antiguos con valores libres. La integridad la garantiza `OrderService` al crear el pedido.
 
+### `packs`
+
+Menús a precio fijo con un plato a elegir por categoría.
+
+| Columna | Tipo | Nulable | Descripción |
+| --- | --- | --- | --- |
+| `id` | TEXT (PK) | No | UUID |
+| `restaurant_id` | TEXT | No | FK → `restaurants.id` |
+| `name` | TEXT | No | Nombre (hasta 100 caracteres) |
+| `description` | TEXT | Sí | Descripción (hasta 300 caracteres) |
+| `price` | REAL | No | Precio del pack, `CHECK(price > 0)` |
+| `available` | INTEGER | No | 1 = se puede pedir (por defecto) |
+| `created_at` / `updated_at` | TEXT | No | Fechas |
+
+### `pack_categories`
+
+Categorías que forman un pack, en orden. PK `(pack_id, category)`: una categoría no se repite en un pack.
+
+| Columna | Tipo | Nulable | Descripción |
+| --- | --- | --- | --- |
+| `pack_id` | TEXT | No | FK → `packs.id` (`ON DELETE CASCADE`) |
+| `category` | TEXT | No | `entrante`, `principal`, `postre` o `bebida` |
+| `position` | INTEGER | No | Orden dentro del pack |
+
+### `pack_excluded_dishes`
+
+Platos bloqueados dentro de un pack. PK `(pack_id, dish_id)`.
+
+| Columna | Tipo | Nulable | Descripción |
+| --- | --- | --- | --- |
+| `pack_id` | TEXT | No | FK → `packs.id` (`ON DELETE CASCADE`) |
+| `dish_id` | TEXT | No | FK → `dishes.id` (`ON DELETE CASCADE`: borrar el plato borra la exclusión) |
+
+### `order_item_packs`
+
+Datos de pack de un ítem de pedido (0..1 por ítem). `order_items` no cambia.
+
+| Columna | Tipo | Nulable | Descripción |
+| --- | --- | --- | --- |
+| `order_item_id` | TEXT (PK) | No | FK → `order_items.id` (`ON DELETE CASCADE`) |
+| `pack_id` | TEXT | No | Pack pedido (**sin FK**, para conservar el histórico si se borra el pack) |
+| `pack_name` | TEXT | No | Nombre del pack en el momento del pedido |
+| `pack_instance_id` | TEXT | No | Agrupa los ítems de una misma unidad del pack |
+| `unit_price` | REAL | No | Precio cobrado por el ítem: el del pack en el primero, 0 en el resto |
+
+Al leer un pedido, el precio de cada ítem es `COALESCE(order_item_packs.unit_price, dishes.price)`, así la cuenta suma el precio del pack.
+
 ---
 
 ## Relaciones
@@ -380,6 +427,10 @@ Mesas de un restaurante (se llama así para no confundirla con el concepto gené
 | Restaurant + cliente → ClientPoints | 1:1 | Un saldo por cliente y restaurante |
 | Order → Bill | 1:0..1 | Un pedido tiene como mucho una cuenta |
 | Restaurant → Tables | 1:N | Un restaurante tiene muchas mesas (`restaurant_tables`) |
+| Restaurant → Packs | 1:N | Un restaurante tiene muchos packs |
+| Pack → PackCategories | 1:N | Un pack tiene de 1 a 4 categorías |
+| Pack ↔ Dish | N:M | Platos excluidos de un pack (via `pack_excluded_dishes`) |
+| OrderItem → OrderItemPack | 1:0..1 | Datos de pack del ítem, si viene de un pack |
 
 ---
 

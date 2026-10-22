@@ -22,11 +22,14 @@ Terminología del dominio y conceptos técnicos utilizados en el proyecto Restte
 | **Puntos** | Saldo de fidelidad de un cliente en un restaurante. Se ganan al pedir la cuenta (1 por euro pagado, parte entera) y se canjean por descuentos. |
 | **Bill (cuenta)** | Cuenta que el cliente pide para un pedido: subtotal, descuento por código, descuento por puntos, total y puntos ganados. Una por pedido. |
 | **Table (mesa)** | Mesa de un restaurante, con número, descripción opcional, capacidad y estado. Se guarda en `restaurant_tables`. Estados: `libre` (se puede ocupar), `ocupada` (un cliente la tiene; los pedidos con mesa solo se aceptan para mesas ocupadas) y `reservada` (fijada a mano por admin o empleados; sin fecha ni titular). Solo los empleados o el admin la devuelven a `libre`. |
+| **Pack** | Menú a precio fijo de un restaurante (p. ej. entrante + principal + bebida por 20 €). Define de 1 a 4 categorías de plato y el cliente elige un plato de cada una al pedir. Lo gestionan `admin` y `manager`. |
+| **Plato excluido (de un pack)** | Plato que el administrador bloquea dentro de un pack (p. ej. la cerveza en la bebida). Los platos no excluidos, disponibles y de la categoría son **elegibles**. |
 
 Dos particularidades del modelo que conviene tener presentes:
 
 - **Los clientes son `Employee`.** No hay entidad ni tabla de clientes: un cliente es una fila de `employees` con `role = 'cliente'` y `restaurant_id = null`. Por eso el login es el mismo endpoint para todos y la respuesta se llama `employee` incluso al registrarse como cliente.
 - **Cada unidad pedida es un `OrderItem`.** Al crear un pedido con 3 unidades de un plato se generan 3 filas con `quantity: 1`, para que cocina pueda marcar el estado de cada una por separado.
+- **Un pack pedido son varios `OrderItem`.** Cada plato elegido es un ítem normal (cocina y barra no distinguen packs) marcado con el pack y una instancia común; el precio del pack va en el primer ítem y los demás valen 0.
 
 ### Roles
 
