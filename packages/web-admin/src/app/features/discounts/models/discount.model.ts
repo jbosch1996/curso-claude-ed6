@@ -32,3 +32,16 @@ export interface CreatePointsRuleDto {
   points: number
   discount: number
 }
+
+export interface PointsEarningRate {
+  restaurantId: string
+  amount: number
+  points: number
+  isDefault: boolean
+  updatedAt: string | null
+}
+
+export interface UpdatePointsEarningDto {
+  amount: number
+  points: number
+}

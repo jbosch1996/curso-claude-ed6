@@ -60,3 +60,45 @@ describe('Database (tablas de descuentos y puntos)', () => {
         await expect(insertar('b2')).rejects.toThrow()
     })
 })
+
+describe('Database (ritmo de ganancia de puntos)', () => {
+    let db: Database
+    const ahora = new Date().toISOString()
+    const insertarRitmo = (amount: number, points: number, restaurantId = 'r1') => db.run(
+        'INSERT INTO points_earning_rates (restaurant_id, amount, points, updated_at) VALUES (?, ?, ?, ?)',
+        [restaurantId, amount, points, ahora]
+    )
+
+    beforeEach(async () => {
+        process.env.NODE_ENV = 'test'
+        db = new Database()
+        await db.initialize()
+        await db.run(
+            'INSERT INTO restaurants (id, name, address, email, phone, owner_first_name, owner_last_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            ['r1', 'La Trattoria', 'Calle Mayor 10', 'info@trattoria.com', '+34 612345678', 'Carlos', 'García', ahora, ahora]
+        )
+    })
+
+    afterEach(async () => {
+        await db.close()
+    })
+
+    it('guarda un único ritmo por restaurante', async () => {
+        await insertarRitmo(10, 3)
+        await expect(insertarRitmo(5, 1)).rejects.toThrow()
+    })
+
+    it('no permite importes ni puntos no positivos ni restaurantes inexistentes', async () => {
+        await expect(insertarRitmo(0, 1)).rejects.toThrow()
+        await expect(insertarRitmo(1, 0)).rejects.toThrow()
+        await expect(insertarRitmo(1, 1, 'no-existe')).rejects.toThrow()
+    })
+
+    it('crea la tabla en una base existente que aún no la tiene, sin perder datos', async () => {
+        await db.run('DROP TABLE points_earning_rates')
+        await (db as any).runInitialMigrations()
+        await insertarRitmo(10, 3)
+        const restaurantes = await db.all<{ id: string }>('SELECT id FROM restaurants')
+        expect(restaurantes.map(r => r.id)).toEqual(['r1'])
+    })
+})

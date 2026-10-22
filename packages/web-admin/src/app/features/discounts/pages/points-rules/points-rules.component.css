@@ -47,3 +47,15 @@
   font-weight: 600;
   color: var(--green-light);
 }
+
+.hint {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.saved {
+  color: var(--green-light);
+  font-size: 13px;
+  margin-bottom: 12px;
+}

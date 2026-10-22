@@ -6,6 +6,7 @@ import { MockBillRepository } from '@repositories/mocks/MockBillRepository.js'
 import { MockDiscountCodeRepository } from '@repositories/mocks/MockDiscountCodeRepository.js'
 import { MockPointsRuleRepository } from '@repositories/mocks/MockPointsRuleRepository.js'
 import { MockClientPointsRepository } from '@repositories/mocks/MockClientPointsRepository.js'
+import { MockPointsEarningRepository } from '@repositories/mocks/MockPointsEarningRepository.js'
 import type { Order } from '@models/order.model.js'
 import type { DiscountCode } from '@models/discount-code.model.js'
 import {
@@ -223,5 +224,54 @@ describe('BillService', () => {
         it('un pedido inexistente da OrderNotFoundError', async () => {
             await expect(service.getByOrderId('nope', cliente())).rejects.toThrow(OrderNotFoundError)
         })
+    })
+})
+
+describe('BillService con ritmo de ganancia configurable', () => {
+    let orders: MockOrderRepository
+    let points: MockClientPointsRepository
+    let earning: MockPointsEarningRepository
+    let service: BillService
+
+    const configurar = (amount: number, puntos: number, restaurantId = 'r1') =>
+        earning.save({ restaurantId, amount, points: puntos, isDefault: false, updatedAt: '2026-10-22T10:00:00.000Z' })
+
+    beforeEach(async () => {
+        orders = new MockOrderRepository()
+        points = new MockClientPointsRepository()
+        earning = new MockPointsEarningRepository()
+        service = new BillService(orders, new MockBillRepository(), new MockDiscountCodeRepository(),
+            new MockPointsRuleRepository(), points, earning)
+        await orders.create(pedido('o1', 'r1', 'u1', [10, 10.5, 9.5]))
+    })
+
+    it('aplica el ritmo del restaurante del pedido: 30 € a 5 puntos por cada 10 € dan 15 puntos', async () => {
+        await configurar(10, 5)
+        await configurar(1, 100, 'r2')
+        const cuenta = await service.create('o1', cliente(), {})
+        expect(cuenta).toMatchObject({ total: 30, pointsEarned: 15 })
+        expect(await points.getBalance('u1', 'r1')).toBe(15)
+    })
+
+    it('sin bloques completos no gana ni suma puntos', async () => {
+        await configurar(50, 1)
+        const cuenta = await service.create('o1', cliente(), {})
+        expect(cuenta.pointsEarned).toBe(0)
+        expect(await points.getBalance('u1', 'r1')).toBe(0)
+    })
+
+    it('sin ritmo configurado sigue dando 1 punto por euro', async () => {
+        const cuenta = await service.create('o1', cliente(), {})
+        expect(cuenta.pointsEarned).toBe(30)
+        expect(await points.getBalance('u1', 'r1')).toBe(30)
+    })
+
+    it('calcula los puntos sobre el total tras los descuentos', async () => {
+        await configurar(10, 2)
+        const codes = new MockDiscountCodeRepository()
+        await codes.save(codigo({ type: 'fixed', value: 5 }))
+        service = new BillService(orders, new MockBillRepository(), codes, new MockPointsRuleRepository(), points, earning)
+        const cuenta = await service.create('o1', cliente(), { discountCode: 'VERANO10' })
+        expect(cuenta).toMatchObject({ total: 25, pointsEarned: 4 })
     })
 })

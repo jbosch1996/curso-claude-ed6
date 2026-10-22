@@ -19,7 +19,8 @@ Terminología del dominio y conceptos técnicos utilizados en el proyecto Restte
 | **OrderItem** | Línea de un pedido: un plato con cantidad, notas opcionales y estado. |
 | **DiscountCode** | Código de descuento de un restaurante (porcentaje o importe fijo, con caducidad opcional y activable) que el cliente aplica al pedir la cuenta. |
 | **PointsRule** | Equivalencia puntos → euros definida por el administrador (p. ej. 100 puntos = 10 €). Cada una es un escalón que el cliente puede canjear. |
-| **Puntos** | Saldo de fidelidad de un cliente en un restaurante. Se ganan al pedir la cuenta (1 por euro pagado, parte entera) y se canjean por descuentos. |
+| **Puntos** | Saldo de fidelidad de un cliente en un restaurante. Se ganan al pedir la cuenta según el ritmo de ganancia del restaurante (por defecto 1 por euro pagado, parte entera) y se canjean por descuentos. |
+| **Ritmo de ganancia de puntos** | Regla "por cada X € pagados, Y puntos" que configura cada restaurante (`points_earning_rates`). Solo cuentan los bloques completos de X €; sin configurar, 1 € → 1 punto. |
 | **Bill (cuenta)** | Cuenta que el cliente pide para un pedido: subtotal, descuento por código, descuento por puntos, total y puntos ganados. Una por pedido. |
 | **Table (mesa)** | Mesa de un restaurante, con número, descripción opcional, capacidad y estado. Se guarda en `restaurant_tables`. Estados: `libre` (se puede ocupar), `ocupada` (un cliente la tiene; los pedidos con mesa solo se aceptan para mesas ocupadas) y `reservada` (fijada a mano por admin o empleados; sin fecha ni titular). Solo los empleados o el admin la devuelven a `libre`. |
 

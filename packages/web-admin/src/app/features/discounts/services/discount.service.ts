@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core'
 import { HttpClient } from '@angular/common/http'
 import { environment } from '../../../../environments/environment'
-import type { DiscountCode, CreateDiscountCodeDto, PointsRule, CreatePointsRuleDto } from '../models/discount.model'
+import type { DiscountCode, CreateDiscountCodeDto, PointsRule, CreatePointsRuleDto, PointsEarningRate, UpdatePointsEarningDto } from '../models/discount.model'
 
 @Injectable({ providedIn: 'root' })
 export class DiscountService {
@@ -13,6 +13,10 @@ export class DiscountService {
 
   private rulesUrl(restaurantId: string): string {
     return `${environment.apiUrl}/restaurants/${restaurantId}/points-rules`
+  }
+
+  private earningUrl(restaurantId: string): string {
+    return `${environment.apiUrl}/restaurants/${restaurantId}/points-earning`
   }
 
   getCodes(restaurantId: string) {
@@ -49,5 +53,13 @@ export class DiscountService {
 
   deleteRule(restaurantId: string, id: string) {
     return this.http.delete<void>(`${this.rulesUrl(restaurantId)}/${id}`)
+  }
+
+  getEarning(restaurantId: string) {
+    return this.http.get<PointsEarningRate>(this.earningUrl(restaurantId))
+  }
+
+  updateEarning(restaurantId: string, dto: UpdatePointsEarningDto) {
+    return this.http.put<PointsEarningRate>(this.earningUrl(restaurantId), dto)
   }
 }

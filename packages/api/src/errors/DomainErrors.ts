@@ -288,3 +288,9 @@ export class TableOccupiedError extends AppError {
     super('Cannot delete an occupied table')
   }
 }
+
+export class InvalidPointsEarningError extends AppError {
+  constructor(message?: string) {
+    super(message ?? 'Invalid points earning rate')
+  }
+}

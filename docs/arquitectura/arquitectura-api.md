@@ -363,6 +363,8 @@ Por capas: `models/{discount-code,points-rule,bill}.model.ts`, repositorios (`di
 | `GET` | `/api/v1/restaurants/:restaurantId/points-rules` | admin, manager (+ `requireRestaurantAccess`) — ordenadas por puntos |
 | `PUT` | `/api/v1/restaurants/:restaurantId/points-rules/:id` | admin, manager (+ `requireRestaurantAccess`) |
 | `DELETE` | `/api/v1/restaurants/:restaurantId/points-rules/:id` | admin, manager (+ `requireRestaurantAccess`) — 204 |
+| `GET` | `/api/v1/restaurants/:restaurantId/points-earning` | admin, manager (+ `requireRestaurantAccess`) — ritmo de ganancia; sin configurar, `{ amount: 1, points: 1, isDefault: true, updatedAt: null }` |
+| `PUT` | `/api/v1/restaurants/:restaurantId/points-earning` | admin, manager (+ `requireRestaurantAccess`) — body `{ amount, points }`, 200; 400 `InvalidPointsEarningError` |
 | `GET` | `/api/v1/loyalty/:restaurantId` | autenticado — `{ balance, rules }` del usuario del JWT |
 | `POST` | `/api/v1/orders/:orderId/bill` | autenticado, solo el propietario del pedido — body `{ discountCode?, pointsRuleId? }`, 201 |
 | `GET` | `/api/v1/orders/:orderId/bill` | autenticado — propietario o personal del restaurante (admin, manager, camarero, cocinero) |
@@ -372,7 +374,7 @@ Reglas de `BillService.create`:
 - Una sola cuenta por pedido (`BillAlreadyRequestedError`, 400); un pedido ajeno o inexistente es `OrderNotFoundError` (404).
 - El **código** se normaliza (mayúsculas, sin espacios) y debe existir en el restaurante del pedido, estar activo y no caducado. Cualquier fallo devuelve el mismo mensaje `Invalid or expired discount code`, sin distinguir la causa.
 - El **canje de puntos** usa una equivalencia (`points_rules`) del restaurante: exige saldo suficiente (`InsufficientPointsError`) y que su descuento no supere lo que queda tras el código (`InvalidBillError`). Código y puntos se pueden combinar.
-- **Puntos ganados:** `floor(total)` (1 por euro pagado), por restaurante.
+- **Puntos ganados:** `earnedPoints(total, ritmo)` = `floor(total / amount) * points` en céntimos enteros, con el ritmo del restaurante (`points_earning_rates`, `PointsEarningService`/`SqlitePointsEarningRepository`). Sin ritmo configurado se usa `DEFAULT_POINTS_EARNING` (1 € → 1 punto, es decir `floor(total)`). El total es el pagado tras descuentos; el cambio de ritmo no es retroactivo. `amount` va de 0,01 a 10.000 € (redondeado a céntimos) y `points` es un entero de 1 a 10.000.
 - **Sin transacciones** (la conexión SQLite es compartida): se inserta la cuenta (`UNIQUE(order_id)`), se descuentan los puntos con un `UPDATE … WHERE balance >= ?` atómico (si falla, se borra la cuenta) y se suman los puntos ganados.
 
 ---

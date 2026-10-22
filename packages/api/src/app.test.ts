@@ -20,3 +20,10 @@ describe('app: rutas de descuentos, puntos y mesas montadas y protegidas', () =>
         expect(res.status).toBe(401)
     })
 })
+
+describe('app: ritmo de ganancia de puntos montado y protegido', () => {
+    it.each(['get', 'put'] as const)('%s /api/v1/restaurants/r1/points-earning exige autenticación (401, no 404)', async (metodo) => {
+        const res = await request(app)[metodo]('/api/v1/restaurants/r1/points-earning')
+        expect(res.status).toBe(401)
+    })
+})

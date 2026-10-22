@@ -6,6 +6,7 @@ import { SqliteBillRepository } from '@repositories/bill.repository.js'
 import { SqliteDiscountCodeRepository } from '@repositories/discount-code.repository.js'
 import { SqlitePointsRuleRepository } from '@repositories/points-rule.repository.js'
 import { SqliteClientPointsRepository } from '@repositories/client-points.repository.js'
+import { SqlitePointsEarningRepository } from '@repositories/points-earning.repository.js'
 import { dbConfig } from '@config/database.js'
 import { authenticate } from '@shared/infrastructure/http/middlewares.js'
 
@@ -24,5 +25,6 @@ export default createBillRouter(new BillService(
     new SqliteBillRepository(dbConfig),
     new SqliteDiscountCodeRepository(dbConfig),
     new SqlitePointsRuleRepository(dbConfig),
-    new SqliteClientPointsRepository(dbConfig)
+    new SqliteClientPointsRepository(dbConfig),
+    new SqlitePointsEarningRepository(dbConfig)
 ))
